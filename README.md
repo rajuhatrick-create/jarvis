@@ -1,27 +1,31 @@
 # JARVIS — Just A Rather Very Intelligent System
 
-A **local AI assistant** for Windows with voice control, system management, web dashboard, and task automation. No cloud APIs required — everything runs on your machine.
+A **self-learning AI assistant** with voice control, system management, web dashboard, and cloud deployment. Runs locally on your machine or in the cloud on Render.com.
 
 ## Features
 
-### 🧠 Hybrid Intelligence
-- **Rule-based commands** for fast, reliable system operations
-- **Local LLM support** (Ollama) for natural conversation (optional)
+### 🧠 Self-Learning AI
+- **Teach JARVIS facts** — "teach me Python is a programming language"
+- **Recall with variations** — "what is Python", "tell me about Python", "explain Python"
+- **Entity extraction** — automatically learns about people, places, projects
+- **Word network** — builds semantic associations from conversations
+- **Internet learning** — fetches knowledge from Wikipedia while on power
 
-### 🔊 Voice Control
+### 🔊 Voice Control (Local Mode)
 - Speech-to-text via browser (Web Speech API)
-- Text-to-speech responses (pyttsx3)
+- Text-to-speech responses using Edge TTS (neural voices)
 - Configurable language and voice
 
-### 💻 System Control
+### 💻 System Control (Local Mode)
 - **Volume control** — up, down, mute, set level
 - **App management** — open, close, list running applications
 - **System monitoring** — CPU, RAM, disk, battery status
 - **File operations** — search, list, open files and folders
 
 ### 🌐 Web Dashboard
-- Real-time chat interface via WebSocket
-- Live system stats (CPU, RAM, disk)
+- Voice-first interface with large microphone button
+- Real-time chat via WebSocket
+- Live system stats graphs (Chart.js)
 - Quick command buttons
 - Reminder management
 - Dark theme with responsive design
@@ -37,7 +41,12 @@ A **local AI assistant** for Windows with voice control, system management, web 
 - Jokes and inspirational quotes
 - Time and date queries
 
-## Installation
+### ☁️ Cloud Deployment
+- Deploy to Render.com (free tier)
+- SQLite database for cloud memory storage
+- Cloud/local mode split with shared brain
+
+## Quick Start (Local)
 
 ### Prerequisites
 - Python 3.8+
@@ -47,7 +56,7 @@ A **local AI assistant** for Windows with voice control, system management, web 
 
 1. **Navigate to the project directory:**
 ```bash
-cd C:\Users\DELL\OneDrive\JARVIS
+cd C:\Users\DELL\JARVIS
 ```
 
 2. **Create a virtual environment:**
@@ -58,39 +67,50 @@ python -m venv .venv
 
 3. **Install dependencies:**
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 ```
 
-4. **Configure (optional):**
-Edit `config.yaml` to customize:
-- Server port and host
-- Voice settings (language, TTS voice)
-- Allowed applications
-- Favorite directories
-- Local LLM settings (Ollama)
-
-## Usage
-
-### Start JARVIS
+4. **Start JARVIS:**
 ```bash
 python main.py
 ```
 
-This starts the web server. Open your browser to:
+5. **Open your browser:**
 ```
 http://localhost:8080
 ```
 
-### Optional: Enable Local AI (Ollama)
+## Cloud Deployment (Render.com)
 
-1. Install [Ollama](https://ollama.ai)
-2. Pull a model: `ollama pull phi3`
-3. In `config.yaml`, set:
-```yaml
-llm:
-  enabled: true
-  model: "phi3"
+Deploy JARVIS to the cloud in 5 minutes:
+
+### 1. Push to GitHub
+```bash
+cd C:\Users\DELL\JARVIS
+git remote add origin https://github.com/YOUR_USERNAME/JARVIS.git
+git push -u origin master
 ```
+
+### 2. Deploy to Render.com
+1. Go to [https://render.com](https://render.com) and sign up (free)
+2. Click **"New +"** → **"Web Service"**
+3. Connect your GitHub repository (`JARVIS`)
+4. Use these settings:
+   - **Name:** jarvis-cloud
+   - **Environment:** Python
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `python main.py`
+   - **Plan:** Free
+5. Add environment variables:
+   - `JARVIS_MODE` = `cloud`
+   - `PORT` = `10000`
+   - `DATABASE_PATH` = `/opt/render/app/data/jarvis.db`
+6. Click **"Create Web Service"**
+
+### 3. Access Your Cloud JARVIS
+Render will provide a URL like: `https://jarvis-cloud-xxxx.onrender.com`
+
+**Note:** Free tier spins down after 15 min idle. First request takes ~30-60s to wake up.
 
 ## Commands
 
@@ -99,23 +119,23 @@ llm:
 - "what's the date"
 - "what day is it"
 
-### Volume
+### Volume (Local Only)
 - "volume up" / "volume down"
 - "mute volume"
 - "volume to 50"
 
-### Applications
+### Applications (Local Only)
 - "open Chrome" / "open VS Code"
 - "close notepad"
 - "list running apps"
 
-### Files & Folders
+### Files & Folders (Local Only)
 - "open documents" / "open downloads"
 - "search for report"
 - "list files in desktop"
 
 ### System Info
-- "system info"
+- "system info" / "system status"
 - "CPU usage" / "memory usage"
 - "disk space" / "battery status"
 
@@ -132,6 +152,12 @@ llm:
 - "calculate 25 * 4"
 - "what is 100 / 7"
 
+### Learning
+- "teach me Python is a programming language"
+- "what is Python"
+- "learning status"
+- "local status"
+
 ### Fun
 - "tell me a joke"
 - "give me a quote"
@@ -147,23 +173,36 @@ llm:
 JARVIS/
 ├── main.py                 # Entry point
 ├── config.yaml             # Configuration
-├── requirements.txt        # Python dependencies
-├── data/                   # Runtime data (reminders)
+├── requirements.txt        # Cloud dependencies (Linux-compatible)
+├── requirements-local.txt  # Local dependencies (with Windows packages)
+├── Procfile                # Render.com startup command
+├── render.yaml             # Render.com service config
+├── Dockerfile              # Container definition
+├── .gitignore              # Git exclusions
+├── data/                   # Runtime data (SQLite DB, local cache)
 └── jarvis/
     ├── __init__.py
     ├── brain/              # Core intelligence
     │   ├── __init__.py
     │   ├── router.py       # Command parsing & routing
-    │   └── scheduler.py    # Task & reminder scheduler
+    │   ├── scheduler.py    # Task & reminder scheduler
+    │   ├── learning.py     # Self-learning AI (TF-IDF memory)
+    │   ├── local_learning.py  # Entity extraction, word network
+    │   └── internet_learning.py  # Wikipedia knowledge fetching
     ├── tools/              # System utilities
     │   ├── __init__.py
     │   ├── system.py       # System control (volume, apps, info)
-    │   ├── voice.py        # Speech recognition & TTS
-    │   └── files.py        # File search & management
+    │   ├── voice.py        # Speech recognition & Edge TTS
+    │   ├── files.py        # File search & management
+    │   ├── power.py        # Battery/power monitoring
+    │   └── cloud_sync.py   # Cloud/local memory sync
+    ├── database/           # Database layer
+    │   ├── __init__.py
+    │   └── sqlite_db.py    # SQLite cloud storage
     └── ui/                 # Web interface
         ├── __init__.py
-        ├── server.py       # Starlette web server
-        └── index.html      # Dashboard frontend
+        ├── server.py       # Starlette web server + WebSocket
+        └── index.html      # Voice-first dashboard with Chart.js
 ```
 
 ## Configuration
