@@ -1,0 +1,8 @@
+starlette
+uvicorn
+edge-tts
+pyyaml
+speechrecognition
+psutil
+wikipedia
+websockets

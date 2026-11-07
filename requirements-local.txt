@@ -1,0 +1,4 @@
+# Local development requirements (Windows-specific packages)
+# Install these in addition to requirements.txt for local mode
+-r requirements.txt
+pygame

@@ -1,0 +1,125 @@
+# JARVIS Configuration
+
+# Mode: "local" (full system control + cloud sync) or "cloud" (AI brain only)
+mode: "local"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# SQLite Database - Cloud storage for memory (zero setup, no accounts needed)
+database:
+  # Enable SQLite database (always on for cloud deployment)
+  enabled: true
+  # Path to SQLite database file
+  path: "data/jarvis.db"
+
+voice:
+  # Speech recognition language
+  language: "en-in"
+  # Text-to-speech voice (Windows)
+  tts_voice: 0  # 0 = male, 1 = female (depends on available voices)
+  # Always listen for wake word
+  wake_word: "jarvis"
+  # Enable text-to-speech - JARVIS speaks responses aloud
+  speak_enabled: true
+  # Speaking rate (Edge TTS: percentage -100 to +100, 0 = normal)
+  speak_rate: 0
+  # Speaking volume change (Edge TTS: percentage -100 to +100, 0 = normal)
+  speak_volume: 0
+
+# Local LLM settings (Ollama)
+llm:
+  enabled: false  # Set to true after installing Ollama
+  model: "phi3"   # Lightweight local model
+  api_url: "http://localhost:11434"
+
+# System control
+system:
+  # Allowed applications to launch
+  allowed_apps:
+    - name: "chrome"
+      path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    - name: "firefox"
+      path: "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+    - name: "notepad"
+      path: "C:\\Windows\\System32\\notepad.exe"
+    - name: "calculator"
+      path: "C:\\Windows\\System32\\calc.exe"
+    - name: "terminal"
+      path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    - name: "vscode"
+      path: "C:\\Users\\DELL\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"
+
+  # Favorite directories for quick access
+  favorite_dirs:
+    documents: "C:\\Users\\DELL\\Documents"
+    downloads: "C:\\Users\\DELL\\Downloads"
+    desktop: "C:\\Users\\DELL\\Desktop"
+    onedrive: "C:\\Users\\DELL\\OneDrive"
+
+# Task scheduler
+scheduler:
+  # Max reminders to store
+  max_reminders: 50
+  # Check interval in seconds
+  check_interval: 10
+
+# Learning AI - Self-learning local intelligence
+learning:
+  # Enable automatic learning from interactions
+  auto_learn: true
+  # Similarity threshold for matching (0.0-1.0, lower = more lenient)
+  similarity_threshold: 0.3
+  # Maximum number of memory entries
+  max_memories: 500
+  # Maximum conversation history to keep
+  max_history: 100
+
+# Local AI Learning - Learns from local files, conversations, and interactions
+local_learning:
+  # Enable local AI learning (completely offline)
+  enabled: true
+  # Auto-scan local files for knowledge (runs periodically)
+  auto_scan: false
+  # Hours between automatic file scans
+  scan_interval_hours: 24
+  # Directories to scan for knowledge (leave empty to disable auto-scan)
+  scan_directories:
+    - "C:\\Users\\DELL\\OneDrive\\JARVIS"
+    - "C:\\Users\\DELL\\Documents"
+  # File scanner settings
+  file_scanner:
+    # Maximum file size to scan (in KB)
+    max_file_size_kb: 500
+    # Maximum files per scan session
+    max_files_per_scan: 100
+
+# Internet Learning - Auto-learn from Wikipedia when on power
+internet_learning:
+  # Enable automatic internet learning (only when on power)
+  enabled: true
+  # Continuous loop mode: keep learning non-stop when on power (no cooldown)
+  continuous_loop: true
+  # Categories to learn from (science, technology, history, geography, mathematics, general)
+  categories:
+    - science
+    - technology
+    - history
+    - geography
+    - mathematics
+    - general
+  # Learn new facts on startup (if on power)
+  learn_on_startup: true
+  # Hours between automatic learning sessions (ignored when continuous_loop is true)
+  learning_interval_hours: 2
+  # Maximum new facts per learning session (increased for continuous mode)
+  max_new_entries_per_session: 20
+  # Seconds between learning sessions in continuous mode
+  continuous_loop_interval: 60
+  # Rate limiting: seconds between Wikipedia API requests (higher for continuous mode)
+  rate_limit_delay: 2
+  # Maximum Wikipedia API requests per session
+  max_requests_per_session: 50
+  # Backoff delay when Wikipedia returns 429 (seconds)
+  rate_limit_backoff: 10

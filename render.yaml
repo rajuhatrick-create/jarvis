@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: jarvis-cloud
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: JARVIS_MODE
+        value: cloud
+      - key: DATABASE_PATH
+        value: /opt/render/app/data/jarvis.db
+    healthCheckPath: /healthz

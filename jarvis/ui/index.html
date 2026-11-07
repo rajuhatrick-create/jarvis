@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1a2332;
+            --accent: #00d4ff;
+            --accent-dim: #0099cc;
+            --accent-glow: rgba(0, 212, 255, 0.4);
+            --text-primary: #e0e6ed;
+            --text-secondary: #8892a0;
+            --success: #00ff88;
+            --warning: #ffaa00;
+            --error: #ff4466;
+            --border: #1e2d3d;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.disconnected {
+            background: var(--error);
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        #clock {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Main Layout */
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar with Charts */
+        .sidebar {
+            width: 320px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-title .value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0;
+            text-transform: none;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 100px;
+            margin-top: 8px;
+        }
+
+        .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .quick-command {
+            display: inline-block;
+            padding: 6px 12px;
+            margin: 3px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-command:hover {
+            background: var(--accent);
+            color: var(--bg-primary);
+            border-color: var(--accent);
+        }
+
+        .system-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            max-width: 80%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .message.jarvis .message-avatar {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+        }
+
+        .message.user .message-avatar {
+            background: var(--bg-tertiary);
+        }
+
+        .message-content {
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .message.jarvis .message-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-top-left-radius: 4px;
+        }
+
+        .message.user .message-content {
+            background: var(--accent);
+            color: var(--bg-primary);
+            border-top-right-radius: 4px;
+        }
+
+        .message-time {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .message.user .message-time {
+            text-align: right;
+        }
+
+        /* Voice First Input Area */
+        .input-area {
+            padding: 20px 24px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Voice waveform animation */
+        .voice-waveform {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            height: 30px;
+            margin-bottom: 5px;
+        }
+
+        .voice-waveform .bar {
+            width: 4px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: height 0.1s;
+        }
+
+        .voice-waveform.active .bar {
+            animation: wave 0.8s ease-in-out infinite;
+            background: var(--error);
+        }
+
+        .voice-waveform .bar:nth-child(1) { animation-delay: 0s; }
+        .voice-waveform .bar:nth-child(2) { animation-delay: 0.1s; }
+        .voice-waveform .bar:nth-child(3) { animation-delay: 0.2s; }
+        .voice-waveform .bar:nth-child(4) { animation-delay: 0.3s; }
+        .voice-waveform .bar:nth-child(5) { animation-delay: 0.4s; }
+        .voice-waveform .bar:nth-child(6) { animation-delay: 0.3s; }
+        .voice-waveform .bar:nth-child(7) { animation-delay: 0.2s; }
+        .voice-waveform .bar:nth-child(8) { animation-delay: 0.1s; }
+        .voice-waveform .bar:nth-child(9) { animation-delay: 0s; }
+
+        @keyframes wave {
+            0%, 100% { height: 10px; }
+            50% { height: 30px; }
+        }
+
+        .voice-status-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            height: 16px;
+        }
+
+        .voice-status-text.listening {
+            color: var(--error);
+        }
+
+        /* Main mic button */
+        .mic-button-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mic-button {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 3px solid var(--accent);
+            background: transparent;
+            color: var(--accent);
+            font-size: 28px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .mic-button:hover {
+            background: rgba(0, 212, 255, 0.1);
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        .mic-button.recording {
+            border-color: var(--error);
+            color: var(--error);
+            background: rgba(255, 68, 102, 0.1);
+            box-shadow: 0 0 40px rgba(255, 68, 102, 0.4);
+        }
+
+        .mic-ring {
+            position: absolute;
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            opacity: 0;
+            z-index: 1;
+        }
+
+        .mic-button.recording + .mic-ring {
+            animation: ring-pulse 1.5s ease-out infinite;
+            border-color: var(--error);
+        }
+
+        @keyframes ring-pulse {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        /* Text input row */
+        .text-input-row {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 10px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-field:focus {
+            border-color: var(--accent);
+        }
+
+        .input-field::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .btn-send {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            background: var(--accent);
+            color: var(--bg-primary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-send:hover {
+            background: var(--accent-dim);
+        }
+
+        /* Welcome Screen */
+        .welcome {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .welcome-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .welcome h1 {
+            font-size: 28px;
+            color: var(--accent);
+            letter-spacing: 6px;
+            margin-bottom: 8px;
+        }
+
+        .welcome p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        .welcome-hint {
+            color: var(--text-secondary);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .welcome-hint .mic-icon {
+            font-size: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* Typing indicator */
+        .typing {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: typingBounce 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-8px); }
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .sidebar { width: 260px; }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .message { max-width: 95%; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div style="display:flex;align-items:center;gap:16px;">
+            <div class="logo">JARVIS</div>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </div>
+        <span id="clock"></span>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <!-- Sidebar with Charts -->
+        <div class="sidebar">
+            <!-- CPU Chart -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    CPU Usage
+                    <span class="value" id="cpuValue">--%</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+
+            <!-- RAM Chart -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    Memory Usage
+                    <span class="value" id="ramValue">--%</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="ramChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Disk Chart -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    Disk Usage
+                    <span class="value" id="diskValue">--%</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="diskChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Battery -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">Power</div>
+                <div class="system-stat">
+                    <span class="stat-label">Battery</span>
+                    <span class="stat-value" id="batteryPercent">--</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">State</span>
+                    <span class="stat-value" id="powerStatus">--</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Learning</span>
+                    <span class="stat-value" id="powerLearning">--</span>
+                </div>
+            </div>
+
+            <!-- AI Brain -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">🧠 AI Brain</div>
+                <div class="system-stat">
+                    <span class="stat-label">Memories</span>
+                    <span class="stat-value" id="memoriesCount">0</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Patterns</span>
+                    <span class="stat-value" id="patternsCount">0</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Words</span>
+                    <span class="stat-value" id="localWords">0</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Entities</span>
+                    <span class="stat-value" id="localEntities">0</span>
+                </div>
+            </div>
+
+            <!-- Internet Learning -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">🌐 Internet Learning</div>
+                <div class="system-stat">
+                    <span class="stat-label">Topics</span>
+                    <span class="stat-value" id="internetTopics">0</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Status</span>
+                    <span class="stat-value" id="internetStatus">--</span>
+                </div>
+                <div style="margin-top:8px; display:flex;gap:6px;">
+                    <span class="quick-command" onclick="triggerLearning()" style="flex:1;text-align:center;">▶ Learn Now</span>
+                </div>
+            </div>
+
+            <!-- Cloud Sync Status -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">☁️ Cloud Sync</div>
+                <div class="system-stat">
+                    <span class="stat-label">Mode</span>
+                    <span class="stat-value" id="syncMode">--</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Database</span>
+                    <span class="stat-value" id="syncDatabase">--</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Memories</span>
+                    <span class="stat-value" id="syncMemories">--</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Topics</span>
+                    <span class="stat-value" id="syncTopics">--</span>
+                </div>
+                <div style="margin-top:8px; display:flex;gap:6px;">
+                    <span class="quick-command" onclick="triggerCloudSync()" style="flex:1;text-align:center;">🔄 Sync Now</span>
+                </div>
+            </div>
+
+            <!-- Voice Control -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">🔊 Voice Control</div>
+                <div class="system-stat">
+                    <span class="stat-label">Speaking</span>
+                    <span class="stat-value" id="speakEnabled">--</span>
+                </div>
+                <div style="margin-top:8px; display:flex;gap:6px;">
+                    <span class="quick-command" onclick="toggleSpeak()" style="flex:1;text-align:center;" id="speakToggleBtn">Toggle Speak</span>
+                </div>
+            </div>
+
+            <!-- Quick Commands -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">Quick Commands</div>
+                <div>
+                    <span class="quick-command" onclick="sendCommand('what time is it')">🕐 Time</span>
+                    <span class="quick-command" onclick="sendCommand('system status')">📊 System</span>
+                    <span class="quick-command" onclick="sendCommand('tell me a joke')">😄 Joke</span>
+                    <span class="quick-command" onclick="sendCommand('volume up')">🔊 Vol+</span>
+                    <span class="quick-command" onclick="sendCommand('volume down')">🔉 Vol-</span>
+                    <span class="quick-command" onclick="sendCommand('help')">❓ Help</span>
+                </div>
+            </div>
+
+            <!-- Reminders -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">Reminders</div>
+                <div id="remindersList">
+                    <div style="color: var(--text-secondary); font-size: 12px;">No reminders</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat -->
+        <div class="chat-area">
+            <div class="messages" id="messages">
+                <div class="welcome" id="welcome">
+                    <div class="welcome-icon">🤖</div>
+                    <h1>JARVIS</h1>
+                    <p>Your personal AI assistant. Tap the microphone and start talking.</p>
+                    <div class="welcome-hint">
+                        <span class="mic-icon">🎤</span>
+                        <span>Click the microphone to speak</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice First Input -->
+            <div class="input-area">
+                <div class="voice-waveform" id="voiceWaveform">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+                <div class="voice-status-text" id="voiceStatus">Tap to speak</div>
+
+                <div class="mic-button-container">
+                    <button class="mic-button" id="micButton" onclick="toggleVoice()" title="Click to speak">
+                        🎤
+                    </button>
+                    <div class="mic-ring"></div>
+                </div>
+
+                <div class="text-input-row">
+                    <input type="text" class="input-field" id="inputField" 
+                           placeholder="Or type a command..."
+                           onkeypress="if(event.key==='Enter')sendMessage()">
+                    <button class="btn-send" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+        let isRecording = false;
+        let recognition = null;
+
+        // Chart instances
+        let cpuChart, ramChart, diskChart;
+        const MAX_DATA_POINTS = 20;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            connectWebSocket();
+            updateClock();
+            setInterval(updateClock, 1000);
+            initCharts();
+            loadSystemInfo();
+            setInterval(loadSystemInfo, 5000);
+            loadReminders();
+            setInterval(loadReminders, 30000);
+            loadLearningStats();
+            setInterval(loadLearningStats, 15000);
+            loadPowerStatus();
+            setInterval(loadPowerStatus, 15000);
+            loadInternetLearningStatus();
+            setInterval(loadInternetLearningStatus, 15000);
+            loadLocalLearningStatus();
+            setInterval(loadLocalLearningStatus, 15000);
+            loadVoiceStatus();
+            setInterval(loadVoiceStatus, 10000);
+            loadSyncStatus();
+            setInterval(loadSyncStatus, 15000);
+        });
+
+        // Initialize Charts
+        function initCharts() {
+            const chartDefaults = {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { 
+                        display: false,
+                        grid: { display: false }
+                    },
+                    y: { 
+                        min: 0, 
+                        max: 100,
+                        grid: { color: 'rgba(30, 45, 61, 0.5)' },
+                        ticks: { 
+                            color: '#8892a0', 
+                            font: { size: 9 },
+                            callback: v => v + '%'
+                        }
+                    }
+                },
+                elements: {
+                    point: { radius: 0, hoverRadius: 4 },
+                    line: { tension: 0.4, borderWidth: 2 }
+                }
+            };
+
+            // CPU Chart
+            cpuChart = new Chart(document.getElementById('cpuChart'), {
+                type: 'line',
+                data: {
+                    labels: Array(MAX_DATA_POINTS).fill(''),
+                    datasets: [{
+                        data: Array(MAX_DATA_POINTS).fill(0),
+                        borderColor: '#00d4ff',
+                        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: chartDefaults
+            });
+
+            // RAM Chart
+            ramChart = new Chart(document.getElementById('ramChart'), {
+                type: 'line',
+                data: {
+                    labels: Array(MAX_DATA_POINTS).fill(''),
+                    datasets: [{
+                        data: Array(MAX_DATA_POINTS).fill(0),
+                        borderColor: '#00ff88',
+                        backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: chartDefaults
+            });
+
+            // Disk Chart (static, updates less frequently)
+            diskChart = new Chart(document.getElementById('diskChart'), {
+                type: 'line',
+                data: {
+                    labels: Array(MAX_DATA_POINTS).fill(''),
+                    datasets: [{
+                        data: Array(MAX_DATA_POINTS).fill(0),
+                        borderColor: '#ffaa00',
+                        backgroundColor: 'rgba(255, 170, 0, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: chartDefaults
+            });
+        }
+
+        function updateChart(chart, value) {
+            const data = chart.data.datasets[0].data;
+            data.shift();
+            data.push(value);
+            chart.update('none');
+        }
+
+        // WebSocket
+        function connectWebSocket() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+            ws.onopen = () => {
+                isConnected = true;
+                updateStatus(true);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleResponse(data);
+            };
+
+            ws.onclose = () => {
+                isConnected = false;
+                updateStatus(false);
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        function updateStatus(connected) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (connected) {
+                dot.classList.remove('disconnected');
+                text.textContent = 'Online';
+            } else {
+                dot.classList.add('disconnected');
+                text.textContent = 'Offline';
+            }
+        }
+
+        // Send message
+        function sendMessage() {
+            const input = document.getElementById('inputField');
+            const text = input.value.trim();
+            if (!text || !isConnected) return;
+
+            addMessage('user', text);
+            input.value = '';
+            ws.send(JSON.stringify({ type: 'command', text: text }));
+            showTyping();
+        }
+
+        function sendCommand(text) {
+            document.getElementById('inputField').value = text;
+            sendMessage();
+        }
+
+        // Handle response
+        function handleResponse(data) {
+            removeTyping();
+            if (data.type === 'response') {
+                addMessage('jarvis', data.text);
+            } else if (data.type === 'reminder') {
+                addMessage('jarvis', `⏰ Reminder: ${data.message}`);
+                loadReminders();
+            } else if (data.type === 'learning_update') {
+                loadInternetLearningStatus();
+            }
+        }
+
+        // Add message to chat
+        function addMessage(sender, text) {
+            const welcome = document.getElementById('welcome');
+            if (welcome) welcome.style.display = 'none';
+
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+
+            const avatar = sender === 'jarvis' ? '🤖' : '👤';
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            div.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div>
+                    <div class="message-content">${escapeHtml(text)}</div>
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function showTyping() {
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'message jarvis';
+            div.id = 'typingIndicator';
+            div.innerHTML = `
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="typing">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function removeTyping() {
+            const typing = document.getElementById('typingIndicator');
+            if (typing) typing.remove();
+        }
+
+        // Voice input
+        function toggleVoice() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                addMessage('jarvis', 'Voice input is not supported in this browser. Try Chrome or Edge.');
+                return;
+            }
+
+            if (isRecording) {
+                stopVoice();
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'en-IN';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                updateVoiceUI(true);
+            };
+
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                document.getElementById('inputField').value = text;
+                sendMessage();
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                updateVoiceUI(false);
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                isRecording = false;
+                updateVoiceUI(false);
+            };
+
+            recognition.start();
+        }
+
+        function stopVoice() {
+            if (recognition) recognition.stop();
+            isRecording = false;
+            updateVoiceUI(false);
+        }
+
+        function updateVoiceUI(recording) {
+            const micBtn = document.getElementById('micButton');
+            const waveform = document.getElementById('voiceWaveform');
+            const statusText = document.getElementById('voiceStatus');
+
+            if (recording) {
+                micBtn.classList.add('recording');
+                waveform.classList.add('active');
+                statusText.textContent = 'Listening...';
+                statusText.classList.add('listening');
+            } else {
+                micBtn.classList.remove('recording');
+                waveform.classList.remove('active');
+                statusText.textContent = 'Tap to speak';
+                statusText.classList.remove('listening');
+            }
+        }
+
+        // System info with charts
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch('/api/system');
+                const info = await response.json();
+                
+                if (info.cpu_usage) {
+                    const cpuPercent = parseInt(info.cpu_usage) || 0;
+                    document.getElementById('cpuValue').textContent = cpuPercent + '%';
+                    updateChart(cpuChart, cpuPercent);
+                }
+                if (info.ram_usage) {
+                    const ramPercent = parseInt(info.ram_usage) || 0;
+                    document.getElementById('ramValue').textContent = ramPercent + '%';
+                    updateChart(ramChart, ramPercent);
+                }
+                if (info.disk_usage) {
+                    const diskPercent = parseInt(info.disk_usage) || 0;
+                    document.getElementById('diskValue').textContent = diskPercent + '%';
+                    updateChart(diskChart, diskPercent);
+                }
+            } catch (e) {
+                console.error('Failed to load system info:', e);
+            }
+        }
+
+        // Reminders
+        async function loadReminders() {
+            try {
+                const response = await fetch('/api/reminders');
+                const reminders = await response.json();
+                const container = document.getElementById('remindersList');
+                
+                if (reminders.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No reminders</div>';
+                    return;
+                }
+
+                container.innerHTML = reminders.map(r => {
+                    const time = new Date(r.trigger_time).toLocaleString([], { 
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                    });
+                    return `<div style="padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--border);">
+                        <div style="color: var(--text-primary);">${escapeHtml(r.message)}</div>
+                        <div style="color: var(--text-secondary); font-size: 10px;">⏰ ${time}</div>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                console.error('Failed to load reminders:', e);
+            }
+        }
+
+        // Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString([], { 
+                hour: '2-digit', minute: '2-digit', second: '2-digit' 
+            });
+        }
+
+        // Learning AI stats
+        async function loadLearningStats() {
+            try {
+                const response = await fetch('/api/learning/stats');
+                const stats = await response.json();
+                
+                if (stats.total_memories !== undefined) {
+                    document.getElementById('memoriesCount').textContent = stats.total_memories;
+                    document.getElementById('patternsCount').textContent = stats.total_patterns;
+                }
+            } catch (e) {
+                console.error('Failed to load learning stats:', e);
+            }
+        }
+
+        // Power status
+        async function loadPowerStatus() {
+            try {
+                const response = await fetch('/api/power/status');
+                const data = await response.json();
+                
+                if (data.percent !== undefined) {
+                    document.getElementById('batteryPercent').textContent = data.percent + '%';
+                    
+                    const statusEl = document.getElementById('powerStatus');
+                    if (data.charging) {
+                        statusEl.textContent = '⚡ Charging';
+                        statusEl.style.color = '#4ade80';
+                    } else if (data.plugged) {
+                        statusEl.textContent = '🔌 On Power';
+                        statusEl.style.color = '#4ade80';
+                    } else {
+                        statusEl.textContent = '🔋 Battery';
+                        statusEl.style.color = '#fbbf24';
+                    }
+                    
+                    const learningEl = document.getElementById('powerLearning');
+                    if (data.is_on_power) {
+                        learningEl.textContent = '✅ Active';
+                        learningEl.style.color = '#4ade80';
+                    } else {
+                        learningEl.textContent = '⏸ Paused';
+                        learningEl.style.color = '#f87171';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load power status:', e);
+            }
+        }
+
+        // Internet learning status
+        async function loadInternetLearningStatus() {
+            try {
+                const response = await fetch('/api/internet-learning/status');
+                const data = await response.json();
+                
+                if (data.learned_topics !== undefined) {
+                    document.getElementById('internetTopics').textContent = data.learned_topics;
+                    
+                    const statusEl = document.getElementById('internetStatus');
+                    if (data.is_learning) {
+                        statusEl.textContent = '🔄 Learning...';
+                        statusEl.style.color = '#60a5fa';
+                    } else if (data.status === 'paused (on battery)') {
+                        statusEl.textContent = '⏸ On Battery';
+                        statusEl.style.color = '#fbbf24';
+                    } else if (data.status && data.status.includes('continuous')) {
+                        statusEl.textContent = '🔁 Active';
+                        statusEl.style.color = '#4ade80';
+                    } else if (data.enabled) {
+                        statusEl.textContent = '✅ Ready';
+                        statusEl.style.color = '#4ade80';
+                    } else {
+                        statusEl.textContent = '❌ Disabled';
+                        statusEl.style.color = '#f87171';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load internet learning status:', e);
+            }
+        }
+
+        // Trigger learning
+        async function triggerLearning() {
+            try {
+                const response = await fetch('/api/internet-learning/trigger', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'started') {
+                    addMessage('jarvis', '🌐 Starting internet learning... I\'ll fetch new knowledge from Wikipedia.');
+                } else if (data.status === 'learning') {
+                    addMessage('jarvis', '⏳ Already learning... Please wait.');
+                } else {
+                    addMessage('jarvis', '⚠️ ' + (data.message || 'Could not start learning'));
+                }
+            } catch (e) {
+                console.error('Failed to trigger learning:', e);
+            }
+        }
+
+        // Local AI Learning status
+        async function loadLocalLearningStatus() {
+            try {
+                const response = await fetch('/api/local-learning/status');
+                const data = await response.json();
+                
+                if (data.word_network_size !== undefined) {
+                    document.getElementById('localWords').textContent = data.word_network_size;
+                    document.getElementById('localEntities').textContent = data.entity_count;
+                }
+            } catch (e) {
+                console.error('Failed to load local learning status:', e);
+            }
+        }
+
+        // Voice status (speak toggle)
+        async function loadVoiceStatus() {
+            try {
+                const response = await fetch('/api/voice/status');
+                const data = await response.json();
+                
+                if (data.speak_enabled !== undefined) {
+                    const el = document.getElementById('speakEnabled');
+                    const btn = document.getElementById('speakToggleBtn');
+                    if (data.speak_enabled) {
+                        el.textContent = '🔊 On';
+                        el.style.color = '#4ade80';
+                        btn.textContent = '🔊 Mute';
+                    } else {
+                        el.textContent = '🔇 Off';
+                        el.style.color = '#f87171';
+                        btn.textContent = '🔇 Unmute';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load voice status:', e);
+            }
+        }
+
+        // Toggle speak on/off
+        async function toggleSpeak() {
+            try {
+                const response = await fetch('/api/voice/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadVoiceStatus();
+                }
+            } catch (e) {
+                console.error('Failed to toggle speak:', e);
+            }
+        }
+
+        // Cloud sync status
+        async function loadSyncStatus() {
+            try {
+                const response = await fetch('/api/sync/status');
+                const data = await response.json();
+                
+                const modeEl = document.getElementById('syncMode');
+                const databaseEl = document.getElementById('syncDatabase');
+                const memoriesEl = document.getElementById('syncMemories');
+                const topicsEl = document.getElementById('syncTopics');
+                
+                if (data.mode) {
+                    modeEl.textContent = data.mode === 'cloud' ? '☁️ Cloud' : '💻 Local';
+                    modeEl.style.color = data.mode === 'cloud' ? '#60a5fa' : '#4ade80';
+                }
+                if (data.database_connected !== undefined) {
+                    databaseEl.textContent = data.database_connected ? '✅ Connected' : '❌ Offline';
+                    databaseEl.style.color = data.database_connected ? '#4ade80' : '#f87171';
+                }
+                if (data.memories_count !== undefined) {
+                    memoriesEl.textContent = data.memories_count;
+                }
+                if (data.topics_learned !== undefined) {
+                    topicsEl.textContent = data.topics_learned;
+                }
+            } catch (e) {
+                console.error('Failed to load sync status:', e);
+            }
+        }
+
+        // Trigger cloud sync
+        async function triggerCloudSync() {
+            try {
+                const response = await fetch('/api/sync/trigger', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    addMessage('jarvis', '☁️ Cloud sync completed successfully!');
+                    loadSyncStatus();
+                } else {
+                    addMessage('jarvis', '⚠️ Sync: ' + (data.message || 'Could not sync'));
+                }
+            } catch (e) {
+                console.error('Failed to trigger sync:', e);
+            }
+        }
+
+        // Utility
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
