@@ -95,6 +95,19 @@ local_learning:
     # Maximum files per scan session
     max_files_per_scan: 100
 
+# Cloud Sync - Periodic sync between local and cloud JARVIS
+cloud_sync:
+  # Enable automatic sync with cloud JARVIS
+  enabled: true
+  # URL of the cloud JARVIS instance
+  cloud_url: "https://jarvis-k676.onrender.com"
+  # Minutes between sync operations
+  sync_interval_minutes: 30
+  # Sync memories from cloud to local (pull)
+  pull_memories: true
+  # Sync memories from local to cloud (push)
+  push_memories: true
+
 # Internet Learning - Auto-learn from Wikipedia when on power
 internet_learning:
   # Enable automatic internet learning (only when on power)

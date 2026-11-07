@@ -114,6 +114,10 @@ class CommandRouter:
             "local_status": re.compile(r'(local\s*status|local\s*(?:ai\s*)?learn(?:ing)?\s*status|what\s*have\s*you\s*locally\s*learned|local\s*brain)', re.I),
             "scan_files": re.compile(r'(scan\s*(?:my\s*)?(?:files?|folders?|directories?|local\s*files?))', re.I),
             "who_is": re.compile(r'who\s+(?:is|was)\s+(.+)', re.I),
+            
+            # Cloud Sync
+            "cloud_sync_status": re.compile(r'(cloud\s*sync\s*status|sync\s*status|cloud\s*status|is\s*sync\s*(?:ing|working)|sync\s*info)', re.I),
+            "cloud_sync_now": re.compile(r'(sync\s*now|sync\s*with\s*cloud|cloud\s*sync\s*now|push\s*to\s*cloud|pull\s*from\s*cloud)', re.I),
         }
         logger.info(f"Registered {len(self.patterns)} command patterns")
     

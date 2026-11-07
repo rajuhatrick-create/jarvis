@@ -297,7 +297,12 @@ class InternetLearner:
             try:
                 data = self.sqlite_db.load_internet_learning()
                 self.learned_topics = set(data.get('topics', []))
-                self.stats = data.get('stats', self.stats)
+                # Merge stats to preserve defaults
+                loaded_stats = data.get('stats', {})
+                for key in self.stats:
+                    if key not in loaded_stats:
+                        loaded_stats[key] = self.stats[key]
+                self.stats = loaded_stats
                 logger.info(f"Loaded {len(self.learned_topics)} previously learned topics from SQLite")
                 return
             except Exception as e:
@@ -310,7 +315,12 @@ class InternetLearner:
                 with open(path, 'r') as f:
                     data = json.load(f)
                     self.learned_topics = set(data.get('topics', []))
-                    self.stats = data.get('stats', self.stats)
+                    # Merge stats to preserve defaults
+                    loaded_stats = data.get('stats', {})
+                    for key in self.stats:
+                        if key not in loaded_stats:
+                            loaded_stats[key] = self.stats[key]
+                    self.stats = loaded_stats
                     logger.info(f"Loaded {len(self.learned_topics)} previously learned topics")
             except Exception as e:
                 logger.error(f"Error loading learned topics: {e}")
@@ -358,11 +368,10 @@ class InternetLearner:
         if not self.enabled:
             return False, "Internet learning is disabled"
         
-        if self.power_monitor is None:
-            return False, "Power monitor not available"
-        
-        if not self.power_monitor.is_on_power():
-            return False, "Not on power — learning paused to save battery"
+        # Cloud mode: no power monitor, always allow learning
+        if self.power_monitor is not None:
+            if not self.power_monitor.is_on_power():
+                return False, "Not on power — learning paused to save battery"
         
         if self.is_learning:
             return False, "Already learning"
@@ -507,7 +516,7 @@ class InternetLearner:
             status = "disabled"
         elif self.is_learning:
             status = "learning"
-        elif self.power_monitor and not self.power_monitor.is_on_power():
+        elif self.power_monitor is not None and not self.power_monitor.is_on_power():
             status = "paused (on battery)"
         elif can_learn:
             status = "active (continuous loop)" if self.continuous_loop else "ready"
@@ -522,6 +531,7 @@ class InternetLearner:
             'reason': reason,
             'status': status,
             'learned_topics': len(self.learned_topics),
+            'learned_topics_list': list(self.learned_topics),
             'categories': self.categories,
             'last_learning': self.last_learning_time.isoformat() if self.last_learning_time else None,
             'stats': self.stats

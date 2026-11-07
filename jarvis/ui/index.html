@@ -623,16 +623,20 @@
                     <span class="stat-value" id="syncMode">--</span>
                 </div>
                 <div class="system-stat" style="margin-top:4px">
-                    <span class="stat-label">Database</span>
-                    <span class="stat-value" id="syncDatabase">--</span>
+                    <span class="stat-label">Syncing</span>
+                    <span class="stat-value" id="cloudSyncRunning">--</span>
                 </div>
                 <div class="system-stat" style="margin-top:4px">
-                    <span class="stat-label">Memories</span>
-                    <span class="stat-value" id="syncMemories">--</span>
+                    <span class="stat-label">Interval</span>
+                    <span class="stat-value" id="cloudSyncInterval">--</span>
                 </div>
                 <div class="system-stat" style="margin-top:4px">
-                    <span class="stat-label">Topics</span>
-                    <span class="stat-value" id="syncTopics">--</span>
+                    <span class="stat-label">Last Sync</span>
+                    <span class="stat-value" id="cloudSyncLast">--</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Syncs</span>
+                    <span class="stat-value" id="cloudSyncCount">0</span>
                 </div>
                 <div style="margin-top:8px; display:flex;gap:6px;">
                     <span class="quick-command" onclick="triggerCloudSync()" style="flex:1;text-align:center;">🔄 Sync Now</span>
@@ -1233,27 +1237,45 @@
         // Cloud sync status
         async function loadSyncStatus() {
             try {
+                // Load mode and database status from /api/sync/status
                 const response = await fetch('/api/sync/status');
                 const data = await response.json();
                 
                 const modeEl = document.getElementById('syncMode');
-                const databaseEl = document.getElementById('syncDatabase');
-                const memoriesEl = document.getElementById('syncMemories');
-                const topicsEl = document.getElementById('syncTopics');
-                
                 if (data.mode) {
                     modeEl.textContent = data.mode === 'cloud' ? '☁️ Cloud' : '💻 Local';
                     modeEl.style.color = data.mode === 'cloud' ? '#60a5fa' : '#4ade80';
                 }
-                if (data.database_connected !== undefined) {
-                    databaseEl.textContent = data.database_connected ? '✅ Connected' : '❌ Offline';
-                    databaseEl.style.color = data.database_connected ? '#4ade80' : '#f87171';
-                }
-                if (data.memories_count !== undefined) {
-                    memoriesEl.textContent = data.memories_count;
-                }
-                if (data.topics_learned !== undefined) {
-                    topicsEl.textContent = data.topics_learned;
+                
+                // Load cloud sync client status from /api/cloud-sync/status (local mode only)
+                try {
+                    const csResponse = await fetch('/api/cloud-sync/status');
+                    const csData = await csResponse.json();
+                    
+                    const runningEl = document.getElementById('cloudSyncRunning');
+                    const intervalEl = document.getElementById('cloudSyncInterval');
+                    const lastEl = document.getElementById('cloudSyncLast');
+                    const countEl = document.getElementById('cloudSyncCount');
+                    
+                    if (csData.enabled) {
+                        runningEl.textContent = csData.is_running ? '🔄 Active' : '⏸ Paused';
+                        runningEl.style.color = csData.is_running ? '#4ade80' : '#fbbf24';
+                        intervalEl.textContent = csData.sync_interval_minutes + ' min';
+                        if (csData.last_sync) {
+                            const t = new Date(csData.last_sync);
+                            lastEl.textContent = t.toLocaleTimeString();
+                        }
+                        countEl.textContent = csData.sync_count;
+                    } else {
+                        runningEl.textContent = '❌ Off';
+                        runningEl.style.color = '#f87171';
+                        intervalEl.textContent = '--';
+                        lastEl.textContent = '--';
+                    }
+                } catch (e) {
+                    // Cloud sync client not available (cloud mode)
+                    document.getElementById('cloudSyncRunning').textContent = '☁️ Cloud';
+                    document.getElementById('cloudSyncRunning').style.color = '#60a5fa';
                 }
             } catch (e) {
                 console.error('Failed to load sync status:', e);
@@ -1263,11 +1285,11 @@
         // Trigger cloud sync
         async function triggerCloudSync() {
             try {
-                const response = await fetch('/api/sync/trigger', { method: 'POST' });
+                const response = await fetch('/api/cloud-sync/trigger', { method: 'POST' });
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    addMessage('jarvis', '☁️ Cloud sync completed successfully!');
+                    addMessage('jarvis', '☁️ Cloud sync complete: ' + data.message);
                     loadSyncStatus();
                 } else {
                     addMessage('jarvis', '⚠️ Sync: ' + (data.message || 'Could not sync'));

@@ -18,10 +18,11 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from jarvis.brain.router import CommandRouter, Command
 from jarvis.brain.scheduler import TaskScheduler
-from jarvis.brain.learning import LearningAI
+from jarvis.brain.learning import LearningAI, MemoryEntry
 from jarvis.brain.internet_learning import InternetLearner
 from jarvis.brain.local_learning import LocalLearningAI
 from jarvis.tools.cloud_sync import CloudSync
+from jarvis.tools.cloud_sync_client import CloudSyncClient
 from jarvis.database.sqlite_db import SQLiteDB
 
 # Windows-only imports — gracefully handle missing packages on Linux (cloud mode)
@@ -115,7 +116,7 @@ def create_app(config: Dict):
     # Initialize local learning AI
     local_learning = LocalLearningAI(config, learning_ai=learning_ai, sqlite_db=sqlite_db)
     
-    # Initialize cloud sync
+    # Initialize cloud sync (database sync)
     cloud_sync = CloudSync(
         sqlite_db=sqlite_db,
         learning_ai=learning_ai,
@@ -123,6 +124,16 @@ def create_app(config: Dict):
         internet_learner=internet_learner
     )
     jarvis_state['cloud_sync'] = cloud_sync
+    
+    # Initialize cloud sync client (HTTP sync with cloud JARVIS) - local mode only
+    cloud_sync_client = None
+    if mode == 'local':
+        cloud_sync_client = CloudSyncClient(
+            config=config,
+            learning_ai=learning_ai,
+            internet_learner=internet_learner
+        )
+        jarvis_state['cloud_sync_client'] = cloud_sync_client
     
     # Attach learning AI to router
     router.set_learning_ai(learning_ai)
@@ -155,6 +166,11 @@ def create_app(config: Dict):
         threading.Thread(target=start_learning_loop, daemon=True).start()
         logger.info("Internet learning background loop started at server startup")
     
+    # Start cloud sync client in local mode
+    if cloud_sync_client and cloud_sync_client.enabled:
+        cloud_sync_client.start()
+        logger.info("Cloud sync client started")
+    
     # Health check endpoint for Render.com
     def health_check(request):
         return JSONResponse({"status": "ok", "mode": mode})
@@ -180,6 +196,10 @@ def create_app(config: Dict):
         Route("/api/power/status", endpoint=get_power_status),
         Route("/api/sync/status", endpoint=get_sync_status),
         Route("/api/sync/trigger", endpoint=trigger_sync, methods=["POST"]),
+        Route("/api/sync/export", endpoint=export_memories),
+        Route("/api/sync/import", endpoint=import_memories, methods=["POST"]),
+        Route("/api/cloud-sync/status", endpoint=get_cloud_sync_status),
+        Route("/api/cloud-sync/trigger", endpoint=trigger_cloud_sync, methods=["POST"]),
         WebSocketRoute("/ws", endpoint=websocket_endpoint),
     ]
     
@@ -532,6 +552,36 @@ def _register_handlers(router, system, voice, files, scheduler, learning_ai, loc
             
             return f"I don't know about '{name}' yet. Tell me about them and I'll remember!"
         router.register_handler("who_is", handle_who_is)
+    
+    # Cloud sync commands (local mode only)
+    def handle_cloud_sync_status(cmd):
+        cloud_sync_client = jarvis_state.get('cloud_sync_client')
+        if cloud_sync_client:
+            status = cloud_sync_client.get_status()
+            lines = ["Cloud Sync Status:"]
+            lines.append(f"  Enabled: {'Yes' if status['enabled'] else 'No'}")
+            lines.append(f"  Cloud URL: {status['cloud_url']}")
+            lines.append(f"  Running: {'Yes' if status['is_running'] else 'No'}")
+            lines.append(f"  Sync interval: {status['sync_interval_minutes']} minutes")
+            lines.append(f"  Syncs completed: {status['sync_count']}")
+            if status['last_sync']:
+                lines.append(f"  Last sync: {status['last_sync']}")
+            if status['last_result']:
+                result = status['last_result']
+                lines.append(f"  Last result: {result.get('message', 'N/A')}")
+            return "\n".join(lines)
+        return "Cloud sync is not available in cloud mode."
+    router.register_handler("cloud_sync_status", handle_cloud_sync_status)
+    
+    def handle_cloud_sync_now(cmd):
+        cloud_sync_client = jarvis_state.get('cloud_sync_client')
+        if cloud_sync_client:
+            result = cloud_sync_client.sync_now()
+            if result.get('status') == 'success':
+                return f"Cloud sync complete! {result.get('message', 'Synced successfully')}"
+            return f"Cloud sync failed: {result.get('message', 'Unknown error')}"
+        return "Cloud sync is not available."
+    router.register_handler("cloud_sync_now", handle_cloud_sync_now)
 
 
 async def index(request):
@@ -737,6 +787,112 @@ async def trigger_sync(request):
     return JSONResponse({'status': 'error', 'message': 'Cloud sync not available'})
 
 
+async def export_memories(request):
+    """Export all memories, local learning data, and internet learning data for sync"""
+    learning_ai = jarvis_state.get('learning_ai')
+    local_learning = jarvis_state.get('local_learning')
+    internet_learner = jarvis_state.get('internet_learner')
+    
+    data = {
+        'memories': [],
+        'local_learning': None,
+        'internet_learning': [],
+        'stats': {},
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    if learning_ai:
+        data['memories'] = [asdict(m) for m in learning_ai.memory.values()]
+        data['stats'] = learning_ai.get_stats()
+    
+    if local_learning:
+        summary = local_learning.get_learning_summary()
+        data['local_learning'] = summary
+    
+    if internet_learner:
+        # Export learned topics with their summaries from learning AI memory
+        topics_data = []
+        if learning_ai:
+            for mem_id, entry in learning_ai.memory.items():
+                if entry.category and entry.category.startswith('internet_'):
+                    topics_data.append({
+                        'topic': entry.response.split(':')[0].strip().lower(),
+                        'summary': entry.response,
+                        'category': entry.category.replace('internet_', ''),
+                        'learned_at': entry.created_at
+                    })
+        data['internet_learning'] = topics_data
+    
+    return JSONResponse(data)
+
+
+async def import_memories(request):
+    """Import memories from another JARVIS instance for sync"""
+    learning_ai = jarvis_state.get('learning_ai')
+    local_learning = jarvis_state.get('local_learning')
+    internet_learner = jarvis_state.get('internet_learner')
+    
+    try:
+        incoming = await request.json()
+    except Exception:
+        return JSONResponse({'success': False, 'error': 'Invalid JSON'}, status_code=400)
+    
+    imported = {'memories': 0, 'topics': 0, 'entities': 0}
+    
+    # Import memories
+    if learning_ai and 'memories' in incoming:
+        existing_ids = set(learning_ai.memory.keys())
+        for item in incoming.get('memories', []):
+            entry_id = item.get('id', '')
+            if entry_id and entry_id not in existing_ids:
+                # Filter out SQLite-specific fields
+                clean_item = {k: v for k, v in item.items() if k in MemoryEntry.__dataclass_fields__}
+                entry = MemoryEntry(**clean_item)
+                learning_ai.memory[entry_id] = entry
+                for pattern in entry.patterns:
+                    learning_ai.matcher.add_document(pattern)
+                imported['memories'] += 1
+        if imported['memories'] > 0:
+            learning_ai._save_memory()
+            logger.info(f"Imported {imported['memories']} new memories from sync")
+    
+    # Import internet learning topics
+    if internet_learner and 'internet_learning' in incoming:
+        existing_topics = set(internet_learner.learned_topics.keys())
+        for topic_data in incoming.get('internet_learning', []):
+            if isinstance(topic_data, dict):
+                topic = topic_data.get('topic', '')
+                if topic and topic not in existing_topics:
+                    internet_learner.learned_topics[topic] = topic_data
+                    imported['topics'] += 1
+        if imported['topics'] > 0:
+            internet_learner._save_topics()
+            logger.info(f"Imported {imported['topics']} new topics from sync")
+    
+    return JSONResponse({
+        'success': True,
+        'imported': imported,
+        'message': f"Imported {imported['memories']} memories and {imported['topics']} topics"
+    })
+
+
+async def get_cloud_sync_status(request):
+    """Get cloud sync client status"""
+    cloud_sync_client = jarvis_state.get('cloud_sync_client')
+    if cloud_sync_client:
+        return JSONResponse(cloud_sync_client.get_status())
+    return JSONResponse({'error': 'Cloud sync client not initialized', 'enabled': False})
+
+
+async def trigger_cloud_sync(request):
+    """Trigger an immediate cloud sync"""
+    cloud_sync_client = jarvis_state.get('cloud_sync_client')
+    if cloud_sync_client:
+        result = cloud_sync_client.sync_now()
+        return JSONResponse(result)
+    return JSONResponse({'status': 'error', 'message': 'Cloud sync client not available'})
+
+
 async def get_internet_learning_status(request):
     """Get internet learning status"""
     internet_learner = jarvis_state.get('internet_learner')
@@ -780,8 +936,13 @@ async def _internet_learning_loop(internet_learner):
     """Background loop that periodically checks and runs learning sessions"""
     while True:
         try:
-            # Use continuous loop interval when on power, otherwise check every 5 minutes
-            if internet_learner.continuous_loop and internet_learner.power_monitor and internet_learner.power_monitor.is_on_power():
+            # Cloud mode: no power monitor, always use continuous interval
+            # Local mode: use continuous interval only when on power
+            is_on_power = True  # Default for cloud mode
+            if internet_learner.power_monitor is not None:
+                is_on_power = internet_learner.power_monitor.is_on_power()
+            
+            if internet_learner.continuous_loop and is_on_power:
                 interval = internet_learner.continuous_loop_interval
                 logger.debug(f"Continuous loop mode: checking every {interval}s")
             else:
