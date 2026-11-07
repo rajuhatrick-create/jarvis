@@ -150,7 +150,9 @@ class LearningAI:
             try:
                 data = self.sqlite_db.load_memory()
                 for item in data.get('memories', []):
-                    entry = MemoryEntry(**item)
+                    # Filter out SQLite-specific fields not in MemoryEntry
+                    clean_item = {k: v for k, v in item.items() if k in MemoryEntry.__dataclass_fields__}
+                    entry = MemoryEntry(**clean_item)
                     self.memory[entry.id] = entry
                     for pattern in entry.patterns:
                         self.matcher.add_document(pattern)
