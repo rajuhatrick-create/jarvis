@@ -11,8 +11,8 @@ server:
 database:
   # Enable SQLite database (always on for cloud deployment)
   enabled: true
-  # Path to SQLite database file
-  path: "data/jarvis.db"
+  # Path to SQLite database file (stored in OneDrive for cloud sync)
+  path: "C:\\Users\\DELL\\OneDrive\\JARVIS\\data\\jarvis.db"
 
 voice:
   # Speech recognition language
@@ -86,7 +86,7 @@ local_learning:
   scan_interval_hours: 24
   # Directories to scan for knowledge (leave empty to disable auto-scan)
   scan_directories:
-    - "C:\\Users\\DELL\\OneDrive\\JARVIS"
+    - "C:\\Users\\DELL\\JARVIS"
     - "C:\\Users\\DELL\\Documents"
   # File scanner settings
   file_scanner:

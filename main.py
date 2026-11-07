@@ -52,6 +52,12 @@ def main():
     config = load_config()
     logger.info(f"Configuration loaded from {PROJECT_ROOT / 'config.yaml'}")
     
+    # Ensure database directory exists (e.g., OneDrive path)
+    db_path = Path(config.get('database', {}).get('path', 'data/jarvis.db'))
+    if not db_path.parent.exists():
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created database directory: {db_path.parent}")
+    
     # Detect mode
     mode = config.get('mode', 'local')
     logger.info(f"Running in {mode} mode")

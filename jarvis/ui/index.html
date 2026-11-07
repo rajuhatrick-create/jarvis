@@ -521,7 +521,11 @@
                 <span id="statusText">Connecting...</span>
             </div>
         </div>
-        <span id="clock"></span>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <span class="quick-command" onclick="toggleSpeakFromHeader()" style="padding:5px 14px;font-size:13px;" id="voiceToggleBtn">🔊 Voice On</span>
+            <span class="quick-command" onclick="triggerCloudSync()" style="padding:5px 14px;font-size:13px;">🔄 Sync Now</span>
+            <span id="clock"></span>
+        </div>
     </div>
 
     <!-- Main -->
@@ -1211,13 +1215,14 @@
                         el.style.color = '#f87171';
                         btn.textContent = '🔇 Unmute';
                     }
+                    updateVoiceHeaderButton(data.speak_enabled);
                 }
             } catch (e) {
                 console.error('Failed to load voice status:', e);
             }
         }
 
-        // Toggle speak on/off
+        // Toggle speak on/off (sidebar button)
         async function toggleSpeak() {
             try {
                 const response = await fetch('/api/voice/toggle', {
@@ -1228,9 +1233,36 @@
                 const data = await response.json();
                 if (data.success) {
                     loadVoiceStatus();
+                    updateVoiceHeaderButton(data.speak_enabled);
                 }
             } catch (e) {
                 console.error('Failed to toggle speak:', e);
+            }
+        }
+
+        // Toggle speak from header button
+        async function toggleSpeakFromHeader() {
+            try {
+                const response = await fetch('/api/voice/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadVoiceStatus();
+                    updateVoiceHeaderButton(data.speak_enabled);
+                }
+            } catch (e) {
+                console.error('Failed to toggle speak:', e);
+            }
+        }
+
+        // Update the header voice toggle button
+        function updateVoiceHeaderButton(enabled) {
+            const btn = document.getElementById('voiceToggleBtn');
+            if (btn) {
+                btn.textContent = enabled ? '🔊 Voice On' : '🔇 Voice Off';
             }
         }
 
