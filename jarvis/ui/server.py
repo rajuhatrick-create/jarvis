@@ -427,20 +427,22 @@ def _register_handlers(router, system, voice, files, scheduler, learning_ai, loc
         return f"I don't have real-time weather data yet, but you can check weather for {location} online. I can open a weather website for you — just say 'search weather {location}'."
     router.register_handler("weather", handle_weather)
     
-    # Jokes
-    jokes = [
-        "Why do programmers prefer dark mode? Because light attracts bugs!",
-        "Why did the developer go broke? Because he used up all his cache!",
-        "What's a programmer's favorite hangout place? Foo Bar!",
-        "Why do Java developers wear glasses? Because they can't C#!",
-        "I changed my password to 'incorrect' so when I forget it, the computer tells me: 'Your password is incorrect.'",
-        "There are only 10 types of people in the world: those who understand binary and those who don't.",
-        "A SQL query walks into a bar, sees two tables, and asks: 'Can I JOIN you?'",
-    ]
+    # Jokes - diverse database with 160+ jokes across 15 categories
+    from jarvis.brain.jokes import get_joke, get_joke_count
+    
+    # Track jokes told in this session to avoid repeats
+    told_jokes = set()
     
     def handle_joke(cmd):
-        import random
-        return random.choice(jokes)
+        joke = get_joke(exclude=list(told_jokes))
+        told_jokes.add(joke)
+        # Keep track limited to last 20 jokes
+        if len(told_jokes) > 20:
+            # Remove oldest jokes (set doesn't preserve order, but this limits growth)
+            for _ in range(5):
+                if told_jokes:
+                    told_jokes.pop()
+        return joke
     router.register_handler("joke", handle_joke)
     
     # Quotes
