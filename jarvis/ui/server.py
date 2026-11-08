@@ -21,6 +21,7 @@ from jarvis.brain.scheduler import TaskScheduler
 from jarvis.brain.learning import LearningAI, MemoryEntry
 from jarvis.brain.internet_learning import InternetLearner
 from jarvis.brain.local_learning import LocalLearningAI
+from jarvis.brain.conversation import ConversationEngine
 from jarvis.tools.cloud_sync import CloudSync
 from jarvis.tools.cloud_sync_client import CloudSyncClient
 from jarvis.database.sqlite_db import SQLiteDB
@@ -139,6 +140,15 @@ def create_app(config: Dict):
     router.set_learning_ai(learning_ai)
     router.set_local_learning(local_learning)
     
+    # Initialize conversation engine
+    conversation_engine = ConversationEngine(
+        config=config,
+        learning_ai=learning_ai,
+        internet_learner=internet_learner,
+        local_learning=local_learning
+    )
+    jarvis_state['conversation_engine'] = conversation_engine
+    
     # Store in global state
     jarvis_state['router'] = router
     jarvis_state['scheduler'] = scheduler
@@ -210,16 +220,12 @@ def create_app(config: Dict):
 def _register_handlers(router, system, voice, files, scheduler, learning_ai, local_learning=None, internet_learner=None, power_monitor=None):
     """Register command handlers"""
     
-    # Greetings
-    from datetime import datetime
+    # Greetings - varied responses from conversation engine
     def handle_greet(cmd):
-        hour = datetime.now().hour
-        if hour < 12:
-            return "Good morning! How can I help you today?"
-        elif hour < 17:
-            return "Good afternoon! What can I do for you?"
-        else:
-            return "Good evening! How may I assist you?"
+        conv_engine = jarvis_state.get('conversation_engine')
+        if conv_engine:
+            return conv_engine.get_greeting()
+        return "Hello! How can I help you?"
     router.register_handler("greet", handle_greet)
     
     # Time
@@ -470,9 +476,12 @@ def _register_handlers(router, system, voice, files, scheduler, learning_ai, loc
   Say 'help' anytime for this message!"""
     router.register_handler("help", handle_help)
     
-    # Goodbye
+    # Goodbye - varied responses
     def handle_goodbye(cmd):
-        return "Goodbye! Have a great day. I'll be here when you need me."
+        conv_engine = jarvis_state.get('conversation_engine')
+        if conv_engine:
+            return conv_engine.get_goodbye()
+        return "Goodbye! Have a great day."
     router.register_handler("goodbye", handle_goodbye)
     
     # Internet learning commands
@@ -975,6 +984,12 @@ async def websocket_endpoint(websocket: WebSocket):
     active_connections.add(websocket)
     logger.info(f"WebSocket connected. Total: {len(active_connections)}")
     
+    # Create conversation context for this connection
+    conv_engine = jarvis_state.get('conversation_engine')
+    conv_context = None
+    if conv_engine:
+        conv_context = conv_engine.create_context()
+    
     try:
         while True:
             data = await websocket.receive_text()
@@ -989,7 +1004,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 text = data
             
             if msg_type == 'command':
-                response = await process_command(text)
+                response = await process_command(text, conv_context=conv_context)
                 await websocket.send_json({
                     'type': 'response',
                     'text': response,
@@ -1010,19 +1025,27 @@ async def websocket_endpoint(websocket: WebSocket):
         active_connections.discard(websocket)
 
 
-async def process_command(text: str) -> str:
+async def process_command(text: str, conv_context=None) -> str:
     """Process a command and return response"""
     router = jarvis_state.get('router')
     learning_ai = jarvis_state.get('learning_ai')
     local_learning = jarvis_state.get('local_learning')
     voice = jarvis_state.get('voice')
+    conv_engine = jarvis_state.get('conversation_engine')
+    
     if not router:
         return "System not initialized"
     
+    # Process with conversation engine if available
+    is_casual = False
+    casual_response = None
+    if conv_engine and conv_context:
+        analysis = conv_engine.process_input(text, conv_context)
+        is_casual = analysis['is_casual']
+        casual_response = analysis['casual_response']
+    
     # Always process with local learning AI for entity extraction and word network
-    # This happens BEFORE command matching so even casual conversation is learned
     if local_learning:
-        # Pre-process: extract entities and build word network from ALL input
         local_learning.word_network.add_sentence(text)
         entities = local_learning.entity_extractor.extract_from_text(text)
         if entities:
@@ -1031,12 +1054,23 @@ async def process_command(text: str) -> str:
             if local_learning.stats['total_interactions_learned'] % 10 == 0:
                 local_learning._save_state()
     
+    # Handle casual conversation first (before command matching)
+    if is_casual and casual_response:
+        if conv_context:
+            conv_context.add_exchange(text, casual_response)
+        if local_learning:
+            local_learning.process_interaction(text, casual_response, was_successful=True)
+        if voice:
+            voice.speak_async(casual_response)
+        return casual_response
+    
     # Check for teach commands first
     teach_response = router.handle_teach_command(text)
     if teach_response:
+        if conv_context:
+            conv_context.add_exchange(text, teach_response)
         if local_learning:
             local_learning.process_interaction(text, teach_response, was_successful=True)
-        # Speak the response
         if voice:
             voice.speak_async(teach_response)
         return teach_response
@@ -1058,16 +1092,19 @@ async def process_command(text: str) -> str:
                    response.startswith("Calculation error")
         
         if not is_error:
+            # Wrap response with conversation engine
+            if conv_engine and conv_context:
+                response = conv_engine.wrap_response(response, conv_context, is_command=True)
+                conv_context.add_exchange(text, response)
+            
             # Auto-learn from successful interactions
             if learning_ai:
                 learning_ai.auto_learn_from_interaction(text, response, was_successful=True)
                 learning_ai.update_conversation_history(text, response)
             
-            # Process with local learning AI
             if local_learning:
                 local_learning.process_interaction(text, response, was_successful=True)
             
-            # Speak the response
             if voice:
                 voice.speak_async(response)
             return response
@@ -1077,27 +1114,37 @@ async def process_command(text: str) -> str:
     if local_learning:
         context_response = local_learning.answer_with_context(text)
         if context_response:
+            if conv_context:
+                conv_context.add_exchange(text, context_response)
             if local_learning:
                 local_learning.process_interaction(text, context_response, was_successful=True)
             if voice:
                 voice.speak_async(context_response)
             return context_response
     
-    # Fallback: try learning AI memory (for unknown commands or failed matches)
+    # Fallback: try learning AI memory
     if learning_ai:
         match = learning_ai.find_match(text)
         if match:
             entry, score = match
             learning_ai.record_success(entry.id)
             learning_ai.update_conversation_history(text, entry.response)
+            if conv_context:
+                conv_context.add_exchange(text, entry.response)
             if voice:
                 voice.speak_async(entry.response)
             return entry.response
     
-    # Last resort: unknown command
-    response = (f"I'm not sure how to handle '{text}'. "
-            "Try saying 'help' to see what I can do. "
-            "You can also teach me by saying 'teach me [question] is [answer]'.")
+    # Last resort: use conversation engine for natural fallback
+    if conv_engine and conv_context:
+        response = conv_engine.generate_fallback(text, conv_context)
+        conv_context.add_exchange(text, response)
+        if voice:
+            voice.speak_async(response)
+        return response
+    
+    # Absolute last resort
+    response = "I'm not sure about that. Try 'help' to see what I can do, or teach me something new!"
     if voice:
         voice.speak_async(response)
     return response

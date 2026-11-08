@@ -136,3 +136,14 @@ internet_learning:
   max_requests_per_session: 50
   # Backoff delay when Wikipedia returns 429 (seconds)
   rate_limit_backoff: 10
+
+# Conversation Engine - Makes JARVIS sound human-like
+personality:
+  # Enable humor in responses
+  humor: true
+  # Show empathy based on detected mood
+  empathy: true
+  # Ask follow-up questions during conversation
+  follow_ups: true
+  # Maximum conversation history to track per session
+  max_history: 10
