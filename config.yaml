@@ -28,11 +28,22 @@ voice:
   # Speaking volume change (Edge TTS: percentage -100 to +100, 0 = normal)
   speak_volume: 0
 
-# Local LLM settings (Ollama)
+# Local LLM settings (Ollama) - deprecated, use custom_llm below
 llm:
-  enabled: false  # Set to true after installing Ollama
-  model: "phi3"   # Lightweight local model
+  enabled: false
+  model: "phi3"
   api_url: "http://localhost:11434"
+
+# Custom Local LLM - Built from scratch, no external dependencies
+custom_llm:
+  # Enable the custom local LLM (neural classifier + Markov chain)
+  enabled: true
+  # Training epochs at startup (more = better accuracy, slower startup)
+  training_epochs: 15
+  # Maximum conversation history to track
+  max_history: 10
+  # Auto-retrain after N interactions (0 = disabled)
+  auto_retrain_interval: 100
 
 # System control
 system:

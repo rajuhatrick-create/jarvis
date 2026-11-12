@@ -659,6 +659,34 @@
                 </div>
             </div>
 
+            <!-- Custom LLM Brain -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">🧠 Custom LLM</div>
+                <div class="system-stat">
+                    <span class="stat-label">Status</span>
+                    <span class="stat-value" id="llmStatus">--</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Vocabulary</span>
+                    <span class="stat-value" id="llmVocab">0</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Patterns</span>
+                    <span class="stat-value" id="llmPatterns">0</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Interactions</span>
+                    <span class="stat-value" id="llmInteractions">0</span>
+                </div>
+                <div class="system-stat" style="margin-top:4px">
+                    <span class="stat-label">Conversations</span>
+                    <span class="stat-value" id="llmConversations">0</span>
+                </div>
+                <div style="margin-top:8px; display:flex;gap:6px;">
+                    <span class="quick-command" onclick="retrainLLM()" style="flex:1;text-align:center;">🔄 Retrain</span>
+                </div>
+            </div>
+
             <!-- Quick Commands -->
             <div class="sidebar-section">
                 <div class="sidebar-title">Quick Commands</div>
@@ -759,6 +787,8 @@
             setInterval(loadVoiceStatus, 10000);
             loadSyncStatus();
             setInterval(loadSyncStatus, 15000);
+            loadCustomLLMStatus();
+            setInterval(loadCustomLLMStatus, 15000);
         });
 
         // Initialize Charts
@@ -1328,6 +1358,53 @@
                 }
             } catch (e) {
                 console.error('Failed to trigger sync:', e);
+            }
+        }
+
+        // Custom LLM status
+        async function loadCustomLLMStatus() {
+            try {
+                const response = await fetch('/api/custom-llm/status');
+                const data = await response.json();
+                
+                const statusEl = document.getElementById('llmStatus');
+                const vocabEl = document.getElementById('llmVocab');
+                const patternsEl = document.getElementById('llmPatterns');
+                const interactionsEl = document.getElementById('llmInteractions');
+                const conversationsEl = document.getElementById('llmConversations');
+                
+                if (data.enabled) {
+                    statusEl.textContent = data.training_complete ? '✅ Trained' : '⏳ Training';
+                    statusEl.style.color = data.training_complete ? '#4ade80' : '#fbbf24';
+                    vocabEl.textContent = data.vocabulary_size || 0;
+                    patternsEl.textContent = data.ngram_patterns || 0;
+                    interactionsEl.textContent = data.total_interactions || 0;
+                    conversationsEl.textContent = data.learning?.total_conversations || 0;
+                } else {
+                    statusEl.textContent = '❌ Off';
+                    statusEl.style.color = '#f87171';
+                }
+            } catch (e) {
+                console.error('Failed to load custom LLM status:', e);
+            }
+        }
+
+        // Retrain custom LLM
+        async function retrainLLM() {
+            try {
+                addMessage('jarvis', '🔄 Retraining custom LLM... This may take a moment.');
+                const response = await fetch('/api/custom-llm/retrain', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'retrained') {
+                    addMessage('jarvis', '✅ LLM retrained successfully! Vocabulary: ' + data.stats.vocabulary_size + ' words, ' + data.stats.ngram_patterns + ' patterns.');
+                    loadCustomLLMStatus();
+                } else {
+                    addMessage('jarvis', '⚠️ Retraining failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error('Failed to retrain LLM:', e);
+                addMessage('jarvis', '❌ Could not retrain LLM.');
             }
         }
 

@@ -22,6 +22,7 @@ from jarvis.brain.learning import LearningAI, MemoryEntry
 from jarvis.brain.internet_learning import InternetLearner
 from jarvis.brain.local_learning import LocalLearningAI
 from jarvis.brain.conversation import ConversationEngine
+from jarvis.brain.custom_llm import CustomLLM
 from jarvis.tools.cloud_sync import CloudSync
 from jarvis.tools.cloud_sync_client import CloudSyncClient
 from jarvis.database.sqlite_db import SQLiteDB
@@ -149,6 +150,28 @@ def create_app(config: Dict):
     )
     jarvis_state['conversation_engine'] = conversation_engine
     
+    # Initialize custom local LLM (built from scratch, no external dependencies)
+    custom_llm_config = config.get('custom_llm', {})
+    if custom_llm_config.get('enabled', False):
+        try:
+            custom_llm = CustomLLM(data_dir=str(Path(config.get('database', {}).get('path', 'data/jarvis.db')).parent / 'llm'))
+            # Try to load saved model first
+            custom_llm.load()
+            if not custom_llm.training_complete:
+                # Train on startup
+                epochs = custom_llm_config.get('training_epochs', 15)
+                custom_llm.train(epochs=epochs)
+                custom_llm.save()
+            else:
+                logger.info("Custom LLM loaded from saved model")
+            jarvis_state['custom_llm'] = custom_llm
+            logger.info(f"Custom LLM initialized: {custom_llm.get_stats()['vocabulary_size']} words, {custom_llm.get_stats()['ngram_patterns']} patterns")
+        except Exception as e:
+            logger.warning(f"Custom LLM failed to initialize: {e}")
+            jarvis_state['custom_llm'] = None
+    else:
+        jarvis_state['custom_llm'] = None
+    
     # Store in global state
     jarvis_state['router'] = router
     jarvis_state['scheduler'] = scheduler
@@ -210,6 +233,8 @@ def create_app(config: Dict):
         Route("/api/sync/import", endpoint=import_memories, methods=["POST"]),
         Route("/api/cloud-sync/status", endpoint=get_cloud_sync_status),
         Route("/api/cloud-sync/trigger", endpoint=trigger_cloud_sync, methods=["POST"]),
+        Route("/api/custom-llm/status", endpoint=get_custom_llm_status),
+        Route("/api/custom-llm/retrain", endpoint=trigger_custom_llm_retrain, methods=["POST"]),
         WebSocketRoute("/ws", endpoint=websocket_endpoint),
     ]
     
@@ -1145,6 +1170,16 @@ async def process_command(text: str, conv_context=None) -> str:
             voice.speak_async(response)
         return response
     
+    # Custom LLM fallback: use the local AI brain
+    custom_llm = jarvis_state.get('custom_llm')
+    if custom_llm:
+        response = custom_llm.respond(text)
+        if conv_context:
+            conv_context.add_exchange(text, response)
+        if voice:
+            voice.speak_async(response)
+        return response
+    
     # Absolute last resort
     response = "I'm not sure about that. Try 'help' to see what I can do, or teach me something new!"
     if voice:
@@ -1164,3 +1199,41 @@ async def broadcast(message: dict):
     
     # Clean up disconnected
     active_connections -= disconnected
+
+
+# ============================================================================
+# Custom LLM API Endpoints
+# ============================================================================
+
+def get_custom_llm_status(request):
+    """Get custom LLM status and statistics"""
+    custom_llm = jarvis_state.get('custom_llm')
+    if not custom_llm:
+        return JSONResponse({"enabled": False, "error": "Custom LLM not initialized"})
+    
+    stats = custom_llm.get_stats()
+    return JSONResponse({
+        "enabled": True,
+        "training_complete": stats["training_complete"],
+        "total_interactions": stats["total_interactions"],
+        "vocabulary_size": stats["vocabulary_size"],
+        "total_words_trained": stats["total_words_trained"],
+        "ngram_patterns": stats["ngram_patterns"],
+        "classifier_intents": stats["classifier_intents"],
+        "classifier_vocab": stats["classifier_vocab"],
+        "conversation_history_size": stats["conversation_history_size"],
+        "learning": stats["learning"],
+    })
+
+def trigger_custom_llm_retrain(request):
+    """Trigger custom LLM retraining"""
+    custom_llm = jarvis_state.get('custom_llm')
+    if not custom_llm:
+        return JSONResponse({"error": "Custom LLM not initialized"}, status_code=400)
+    
+    try:
+        custom_llm.retrain()
+        custom_llm.save()
+        return JSONResponse({"status": "retrained", "stats": custom_llm.get_stats()})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
