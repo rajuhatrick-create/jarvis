@@ -125,6 +125,8 @@ internet_learning:
   enabled: true
   # Continuous loop mode: keep learning non-stop when on power (no cooldown)
   continuous_loop: true
+  # Allow learning even when on battery (disables power-saving pause)
+  learn_on_battery: true
   # Categories to learn from (science, technology, history, geography, mathematics, general)
   categories:
     - science
