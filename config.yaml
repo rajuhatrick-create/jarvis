@@ -160,3 +160,40 @@ personality:
   follow_ups: true
   # Maximum conversation history to track per session
   max_history: 10
+  # British personality settings (Iron Man style)
+  sarcasm_level: 0.5
+  formality_level: 0.8
+
+# Deep Memory - Cross-session memory like movie JARVIS
+deep_memory:
+  # Enable deep memory system
+  enabled: true
+  # Maximum conversation history to store
+  max_conversation_history: 100
+  # Maximum preferences to store
+  max_preferences: 50
+  # Maximum habits to store
+  max_habits: 30
+
+# Proactive Assistant - Monitors and suggests actions
+proactive:
+  # Enable proactive monitoring
+  enabled: true
+  # Check interval in seconds
+  check_interval_seconds: 30
+  # Maximum alerts per hour (rate limiting)
+  max_alerts_per_hour: 3
+  # Thresholds
+  battery_low_threshold: 20
+  battery_critical_threshold: 10
+  cpu_high_threshold: 85
+  cpu_critical_threshold: 95
+  memory_high_threshold: 85
+  memory_critical_threshold: 95
+  disk_low_threshold: 85
+  disk_critical_threshold: 95
+
+# Analyzer - Data analysis and calculations
+analyzer:
+  # Maximum file size to analyze (in MB)
+  max_file_size_mb: 10

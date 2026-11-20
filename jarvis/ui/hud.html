@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S - HUD Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0a0a0a;
+            color: #00d4ff;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        /* Particle canvas background */
+        #particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        
+        /* Main layout */
+        .hud-container {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 280px 1fr 280px;
+            grid-template-rows: 60px 1fr 80px;
+            height: 100vh;
+            gap: 10px;
+            padding: 10px;
+        }
+        
+        /* Header */
+        .hud-header {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            background: rgba(0, 20, 40, 0.8);
+            border-radius: 5px;
+        }
+        
+        .hud-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00d4ff, 0 0 20px #00d4ff;
+            letter-spacing: 8px;
+        }
+        
+        .hud-status {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff00;
+            box-shadow: 0 0 5px #00ff00;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Side panels */
+        .hud-panel {
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            background: rgba(0, 20, 40, 0.8);
+            border-radius: 5px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        .panel-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+            padding-bottom: 5px;
+        }
+        
+        /* Circular gauges */
+        .gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        .gauge {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+        
+        .gauge canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .gauge-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        
+        .gauge-value {
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00d4ff;
+        }
+        
+        .gauge-name {
+            font-size: 10px;
+            opacity: 0.7;
+            text-transform: uppercase;
+        }
+        
+        /* Center chat area */
+        .hud-chat {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            background: rgba(0, 20, 40, 0.8);
+            border-radius: 5px;
+            padding: 15px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding-right: 10px;
+        }
+        
+        .chat-messages::-webkit-scrollbar {
+            width: 5px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.3);
+            border-radius: 3px;
+        }
+        
+        .message {
+            margin-bottom: 12px;
+            padding: 10px;
+            border-radius: 5px;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.user {
+            background: rgba(0, 212, 255, 0.1);
+            border-left: 3px solid #00d4ff;
+        }
+        
+        .message.jarvis {
+            background: rgba(0, 255, 100, 0.1);
+            border-left: 3px solid #00ff64;
+        }
+        
+        .message.system {
+            background: rgba(255, 200, 0, 0.1);
+            border-left: 3px solid #ffc800;
+            font-style: italic;
+        }
+        
+        .message-time {
+            font-size: 10px;
+            opacity: 0.5;
+            margin-top: 5px;
+        }
+        
+        /* Voice input area */
+        .voice-input-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .mic-button {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 2px solid #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+            color: #00d4ff;
+            font-size: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .mic-button:hover {
+            background: rgba(0, 212, 255, 0.2);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+        
+        .mic-button.listening {
+            background: rgba(255, 0, 0, 0.2);
+            border-color: #ff0000;
+            animation: micPulse 1s infinite;
+        }
+        
+        @keyframes micPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.5); }
+            50% { box-shadow: 0 0 0 15px rgba(255, 0, 0, 0); }
+        }
+        
+        .waveform {
+            display: flex;
+            gap: 3px;
+            height: 30px;
+            align-items: center;
+        }
+        
+        .waveform-bar {
+            width: 4px;
+            height: 10px;
+            background: #00d4ff;
+            border-radius: 2px;
+            transition: height 0.1s;
+        }
+        
+        .waveform.active .waveform-bar {
+            animation: waveAnim 0.5s infinite alternate;
+        }
+        
+        @keyframes waveAnim {
+            from { height: 5px; }
+            to { height: 25px; }
+        }
+        
+        .text-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 20, 40, 0.9);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 5px;
+            color: #00d4ff;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        .text-input:focus {
+            border-color: #00d4ff;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+        
+        /* Bottom bar */
+        .hud-bottom {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            background: rgba(0, 20, 40, 0.8);
+            border-radius: 5px;
+            padding: 0 20px;
+        }
+        
+        .quick-btn {
+            padding: 8px 16px;
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 3px;
+            color: #00d4ff;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .quick-btn:hover {
+            background: rgba(0, 212, 255, 0.2);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+        
+        /* Alert notification */
+        .alert-notification {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(255, 100, 0, 0.2);
+            border: 1px solid #ff6400;
+            border-radius: 5px;
+            padding: 15px;
+            max-width: 300px;
+            z-index: 100;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .alert-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #ff6400;
+        }
+        
+        /* Glow effects */
+        .glow-text {
+            text-shadow: 0 0 5px currentColor, 0 0 10px currentColor;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .hud-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: 60px auto 1fr 80px;
+            }
+            .hud-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particles"></canvas>
+    
+    <div class="hud-container">
+        <!-- Header -->
+        <div class="hud-header">
+            <div class="hud-title glow-text">J.A.R.V.I.S</div>
+            <div class="hud-status">
+                <div class="status-indicator">
+                    <div class="status-dot" id="connectionDot"></div>
+                    <span id="connectionStatus">Connecting...</span>
+                </div>
+                <div class="status-indicator">
+                    <span id="clock">00:00:00</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Left panel - System Stats -->
+        <div class="hud-panel" id="leftPanel">
+            <div class="panel-title">System Status</div>
+            
+            <div class="gauge-container">
+                <div class="gauge">
+                    <canvas id="cpuGauge" width="120" height="120"></canvas>
+                    <div class="gauge-label">
+                        <div class="gauge-value" id="cpuValue">0%</div>
+                        <div class="gauge-name">CPU</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="gauge-container">
+                <div class="gauge">
+                    <canvas id="ramGauge" width="120" height="120"></canvas>
+                    <div class="gauge-label">
+                        <div class="gauge-value" id="ramValue">0%</div>
+                        <div class="gauge-name">RAM</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="gauge-container">
+                <div class="gauge">
+                    <canvas id="diskGauge" width="120" height="120"></canvas>
+                    <div class="gauge-label">
+                        <div class="gauge-value" id="diskValue">0%</div>
+                        <div class="gauge-name">DISK</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <div class="panel-title">Power</div>
+                <div id="batteryInfo" style="font-size: 12px;">
+                    Battery: --%
+                </div>
+            </div>
+        </div>
+        
+        <!-- Center - Chat -->
+        <div class="hud-chat">
+            <div class="chat-messages" id="chatMessages">
+                <div class="message system">
+                    <div>J.A.R.V.I.S. initialized. Awaiting your command, sir.</div>
+                    <div class="message-time">System ready</div>
+                </div>
+            </div>
+            
+            <div class="voice-input-area">
+                <button class="mic-button" id="micButton" onclick="toggleVoice()">🎤</button>
+                <div class="waveform" id="waveform">
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                    <div class="waveform-bar"></div>
+                </div>
+                <input type="text" class="text-input" id="textInput" placeholder="Enter command or tap microphone..." 
+                       onkeypress="if(event.key==='Enter')sendMessage()">
+            </div>
+        </div>
+        
+        <!-- Right panel - AI Stats -->
+        <div class="hud-panel" id="rightPanel">
+            <div class="panel-title">AI Brain</div>
+            <div id="aiStats" style="font-size: 12px;">
+                <div>Memories: <span id="memoryCount">--</span></div>
+                <div>Topics: <span id="topicCount">--</span></div>
+                <div>Patterns: <span id="patternCount">--</span></div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <div class="panel-title">Quick Actions</div>
+                <button class="quick-btn" onclick="sendCommand('system status')" style="width: 100%; margin-bottom: 5px;">System Status</button>
+                <button class="quick-btn" onclick="sendCommand('learning status')" style="width: 100%; margin-bottom: 5px;">Learning Status</button>
+                <button class="quick-btn" onclick="sendCommand('tell me a joke')" style="width: 100%; margin-bottom: 5px;">Tell Joke</button>
+                <button class="quick-btn" onclick="sendCommand('generate report')" style="width: 100%; margin-bottom: 5px;">Generate Report</button>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <div class="panel-title">Proactive Alerts</div>
+                <div id="alertList" style="font-size: 11px; max-height: 150px; overflow-y: auto;">
+                    <div style="opacity: 0.5;">No alerts</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bottom bar -->
+        <div class="hud-bottom">
+            <button class="quick-btn" onclick="sendCommand('hello')">Hello</button>
+            <button class="quick-btn" onclick="sendCommand('time')">Time</button>
+            <button class="quick-btn" onclick="sendCommand('date')">Date</button>
+            <button class="quick-btn" onclick="sendCommand('system status')">Status</button>
+            <button class="quick-btn" onclick="sendCommand('tell me a joke')">Joke</button>
+            <button class="quick-btn" onclick="sendCommand('help')">Help</button>
+            <button class="quick-btn" onclick="window.open('/dashboard', '_blank')">Regular UI</button>
+        </div>
+    </div>
+    
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let recognition = null;
+        let isListening = false;
+        
+        // Initialize
+        function init() {
+            connectWebSocket();
+            initParticles();
+            initGauges();
+            updateClock();
+            setInterval(updateClock, 1000);
+            setInterval(fetchSystemStats, 5000);
+            fetchSystemStats();
+            fetchAIStats();
+        }
+        
+        // WebSocket
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            
+            ws.onopen = () => {
+                document.getElementById('connectionStatus').textContent = 'Connected';
+                document.getElementById('connectionDot').style.background = '#00ff00';
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('connectionStatus').textContent = 'Disconnected';
+                document.getElementById('connectionDot').style.background = '#ff0000';
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+        
+        function handleMessage(data) {
+            if (data.type === 'response') {
+                addMessage(data.content, 'jarvis');
+            } else if (data.type === 'suggestion') {
+                showAlert(data.content, data.urgency);
+            }
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('textInput');
+            const message = input.value.trim();
+            if (!message || !ws) return;
+            
+            addMessage(message, 'user');
+            ws.send(JSON.stringify({type: 'command', content: message}));
+            input.value = '';
+        }
+        
+        function sendCommand(command) {
+            addMessage(command, 'user');
+            if (ws) {
+                ws.send(JSON.stringify({type: 'command', content: command}));
+            }
+        }
+        
+        function addMessage(content, type) {
+            const container = document.getElementById('chatMessages');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            
+            const time = new Date().toLocaleTimeString();
+            message.innerHTML = `<div>${content}</div><div class="message-time">${time}</div>`;
+            container.appendChild(message);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // Voice recognition
+        function toggleVoice() {
+            if (isListening) {
+                recognition.stop();
+                return;
+            }
+            
+            if (!recognition) {
+                recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = 'en-IN';
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('textInput').value = transcript;
+                    sendMessage();
+                };
+                
+                recognition.onend = () => {
+                    isListening = false;
+                    document.getElementById('micButton').classList.remove('listening');
+                    document.getElementById('waveform').classList.remove('active');
+                };
+            }
+            
+            recognition.start();
+            isListening = true;
+            document.getElementById('micButton').classList.add('listening');
+            document.getElementById('waveform').classList.add('active');
+        }
+        
+        // System stats
+        async function fetchSystemStats() {
+            try {
+                const response = await fetch('/api/system/stats');
+                const data = await response.json();
+                
+                updateGauge('cpu', data.cpu || 0);
+                updateGauge('ram', data.memory || 0);
+                updateGauge('disk', data.disk || 0);
+                
+                if (data.battery !== undefined) {
+                    document.getElementById('batteryInfo').textContent = 
+                        `Battery: ${data.battery}% ${data.plugged ? '⚡' : '🔋'}`;
+                }
+            } catch (e) {
+                console.error('Failed to fetch system stats:', e);
+            }
+        }
+        
+        async function fetchAIStats() {
+            try {
+                const response = await fetch('/api/learning/stats');
+                const data = await response.json();
+                document.getElementById('memoryCount').textContent = data.memories || 0;
+                document.getElementById('topicCount').textContent = data.topics || 0;
+                document.getElementById('patternCount').textContent = data.patterns || 0;
+            } catch (e) {
+                console.error('Failed to fetch AI stats:', e);
+            }
+        }
+        
+        // Gauges
+        function initGauges() {
+            drawGauge('cpuGauge', 0, '#00d4ff');
+            drawGauge('ramGauge', 0, '#00ff64');
+            drawGauge('diskGauge', 0, '#ffc800');
+        }
+        
+        function updateGauge(type, value) {
+            document.getElementById(`${type}Value`).textContent = `${Math.round(value)}%`;
+            const color = type === 'cpu' ? '#00d4ff' : type === 'ram' ? '#00ff64' : '#ffc800';
+            drawGauge(`${type}Gauge`, value, color);
+        }
+        
+        function drawGauge(canvasId, value, color) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 50;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Background circle
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+            
+            // Value arc
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + (2 * Math.PI * (value / 100));
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            
+            // Glow effect
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+        
+        // Particles
+        function initParticles() {
+            const canvas = document.getElementById('particles');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            const particles = [];
+            const particleCount = 100;
+            
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    size: Math.random() * 2 + 1,
+                });
+            }
+            
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    
+                    if (p.x < 0) p.x = canvas.width;
+                    if (p.x > canvas.width) p.x = 0;
+                    if (p.y < 0) p.y = canvas.height;
+                    if (p.y > canvas.height) p.y = 0;
+                    
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
+                    ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
+                    ctx.fill();
+                });
+                
+                // Draw connections
+                for (let i = 0; i < particles.length; i++) {
+                    for (let j = i + 1; j < particles.length; j++) {
+                        const dx = particles[i].x - particles[j].x;
+                        const dy = particles[i].y - particles[j].y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < 100) {
+                            ctx.beginPath();
+                            ctx.moveTo(particles[i].x, particles[i].y);
+                            ctx.lineTo(particles[j].x, particles[j].y);
+                            ctx.strokeStyle = `rgba(0, 212, 255, ${0.1 * (1 - distance / 100)})`;
+                            ctx.lineWidth = 0.5;
+                            ctx.stroke();
+                        }
+                    }
+                }
+                
+                requestAnimationFrame(animate);
+            }
+            
+            animate();
+            
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            });
+        }
+        
+        // Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString();
+        }
+        
+        // Alerts
+        function showAlert(message, urgency) {
+            const alert = document.createElement('div');
+            alert.className = 'alert-notification';
+            alert.innerHTML = `
+                <div class="alert-title">⚠️ ${urgency.toUpperCase()}</div>
+                <div>${message}</div>
+            `;
+            document.body.appendChild(alert);
+            
+            // Add to alert list
+            const alertList = document.getElementById('alertList');
+            if (alertList.children[0]?.textContent === 'No alerts') {
+                alertList.innerHTML = '';
+            }
+            const alertItem = document.createElement('div');
+            alertItem.style.marginBottom = '5px';
+            alertItem.style.padding = '5px';
+            alertItem.style.borderLeft = '2px solid #ff6400';
+            alertItem.textContent = message;
+            alertList.appendChild(alertItem);
+            
+            // Remove after 10 seconds
+            setTimeout(() => alert.remove(), 10000);
+        }
+        
+        // Start
+        init();
+    </script>
+</body>
+</html>

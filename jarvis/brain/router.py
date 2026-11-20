@@ -86,9 +86,10 @@ class CommandRouter:
             "list_reminders": re.compile(r'(list|show)\s*(?:my\s*)?(reminders?|tasks?|alerts?)', re.I),
             "delete_reminder": re.compile(r'(delete|remove|clear)\s*(?:reminder|task|alert)', re.I),
             
-            # Calculator
-            "calculate": re.compile(r'(calculate|compute)\s*([\d\s\+\-\*\/\.\(\)]+)', re.I),
-            "math_expression": re.compile(r'what\s+is\s+([\d]+[\s]*[\+\-\*\/][\s]*[\d]+(?:[\s]*[\+\-\*\/][\s]*[\d]+)*)', re.I),
+            # Calculator - complex patterns first (percentages, conversions, financial)
+            "calculate_complex": re.compile(r'(calculate|compute|what\s*is)\s+(.+)$', re.I),
+            "calculate": re.compile(r'(calculate|compute)\s*([\d\s\+\-\*\/\.\(\)]+)$', re.I),
+            "math_expression": re.compile(r'what\s+is\s+([\d]+[\s]*[\+\-\*\/][\s]*[\d]+(?:[\s]*[\+\-\*\/][\s]*[\d]+)*)$', re.I),
             
             # Weather
             "weather": re.compile(r'(weather|temperature|forecast)\s*(?:in\s*([\w\s]+))?', re.I),
@@ -118,6 +119,18 @@ class CommandRouter:
             # Cloud Sync
             "cloud_sync_status": re.compile(r'(cloud\s*sync\s*status|sync\s*status|cloud\s*status|is\s*sync\s*(?:ing|working)|sync\s*info)', re.I),
             "cloud_sync_now": re.compile(r'(sync\s*now|sync\s*with\s*cloud|cloud\s*sync\s*now|push\s*to\s*cloud|pull\s*from\s*cloud)', re.I),
+            
+            # Iron Man Features - Analyzer
+            "analyze_file": re.compile(r'(analyze|examine|read|check)\s+(?:file\s*)?([\w\s\.\\/:]+?)(?:\s*file)?$', re.I),
+            "calculate_complex": re.compile(r'(calculate|compute|what\s*is)\s+(.+?)(?:\s*(?:of|to|percent|interest|emi|convert))', re.I),
+            "generate_report": re.compile(r'(generate|create|show)\s+(?:a\s*)?(?:report|summary|system\s*report|learning\s*report)', re.I),
+            
+            # Iron Man Features - Deep Memory
+            "deep_memory_status": re.compile(r'(deep\s*memory\s*status|memory\s*status|what\s*do\s*you\s*remember|user\s*profile|my\s*profile)', re.I),
+            "what_did_we_discuss": re.compile(r'(what\s*did\s*we\s*discuss|what\s*did\s*i\s*ask|remember\s*when|past\s*conversation|conversation\s*history)', re.I),
+            
+            # Iron Man Features - Proactive
+            "proactive_status": re.compile(r'(proactive\s*status|monitoring\s*status|are\s*you\s*monitoring|system\s*monitor)', re.I),
         }
         logger.info(f"Registered {len(self.patterns)} command patterns")
     
@@ -175,6 +188,18 @@ class CommandRouter:
             dir_match = re.search(r'in\s+([\w\s]+)', text, re.I)
             if dir_match:
                 params['directory'] = dir_match.group(1).strip()
+        elif intent == "analyze_file":
+            params['file_path'] = match.group(2).strip()
+        elif intent == "calculate_complex":
+            params['expression'] = match.group(2).strip()
+        elif intent == "what_did_we_discuss":
+            # Extract time frame
+            if 'yesterday' in text.lower():
+                params['time_frame'] = 'yesterday'
+            elif 'this week' in text.lower() or 'week' in text.lower():
+                params['time_frame'] = 'this week'
+            else:
+                params['time_frame'] = 'recently'
         
         return params
     

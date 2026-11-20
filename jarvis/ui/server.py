@@ -23,8 +23,12 @@ from jarvis.brain.internet_learning import InternetLearner
 from jarvis.brain.local_learning import LocalLearningAI
 from jarvis.brain.conversation import ConversationEngine
 from jarvis.brain.custom_llm import CustomLLM
+from jarvis.brain.personality import BritishPersonality
+from jarvis.brain.proactive import ProactiveAssistant
+from jarvis.brain.deep_memory import DeepMemory
 from jarvis.tools.cloud_sync import CloudSync
 from jarvis.tools.cloud_sync_client import CloudSyncClient
+from jarvis.tools.analyzer import Analyzer
 from jarvis.database.sqlite_db import SQLiteDB
 
 # Windows-only imports — gracefully handle missing packages on Linux (cloud mode)
@@ -162,25 +166,54 @@ def create_app(config: Dict):
                 epochs = custom_llm_config.get('training_epochs', 15)
                 custom_llm.train(epochs=epochs)
                 custom_llm.save()
-            else:
-                logger.info("Custom LLM loaded from saved model")
-            jarvis_state['custom_llm'] = custom_llm
-            logger.info(f"Custom LLM initialized: {custom_llm.get_stats()['vocabulary_size']} words, {custom_llm.get_stats()['ngram_patterns']} patterns")
         except Exception as e:
-            logger.warning(f"Custom LLM failed to initialize: {e}")
-            jarvis_state['custom_llm'] = None
+            logger.warning(f"CustomLLM failed to initialize: {e}")
+            custom_llm = None
     else:
-        jarvis_state['custom_llm'] = None
+        custom_llm = None
+    jarvis_state['custom_llm'] = custom_llm
     
-    # Store in global state
+    # === Iron Man Features ===
+    
+    # Initialize British Personality Engine
+    personality = BritishPersonality(config)
+    jarvis_state['personality'] = personality
+    logger.info("BritishPersonality initialized")
+    
+    # Initialize Deep Memory
+    deep_memory = DeepMemory(config, sqlite_db=sqlite_db)
+    jarvis_state['deep_memory'] = deep_memory
+    logger.info("DeepMemory initialized")
+    
+    # Initialize Analyzer
+    analyzer = Analyzer(config)
+    jarvis_state['analyzer'] = analyzer
+    logger.info("Analyzer initialized")
+    
+    # Initialize Proactive Assistant (local mode only)
+    proactive_assistant = None
+    if mode == 'local':
+        proactive_assistant = ProactiveAssistant(config, personality=personality, sqlite_db=sqlite_db)
+        jarvis_state['proactive_assistant'] = proactive_assistant
+        logger.info("ProactiveAssistant initialized")
+    else:
+        logger.info("Cloud mode: ProactiveAssistant disabled")
+    
+    # Store all components in jarvis_state for handlers
     jarvis_state['router'] = router
     jarvis_state['scheduler'] = scheduler
     jarvis_state['learning_ai'] = learning_ai
-    jarvis_state['local_learning'] = local_learning
     jarvis_state['internet_learner'] = internet_learner
+    jarvis_state['local_learning'] = local_learning
+    jarvis_state['conversation_engine'] = conversation_engine
+    jarvis_state['custom_llm'] = custom_llm
+    jarvis_state['personality'] = personality
+    jarvis_state['deep_memory'] = deep_memory
+    jarvis_state['analyzer'] = analyzer
+    jarvis_state['proactive_assistant'] = proactive_assistant
     
     # Register handlers
-    _register_handlers(router, system, voice, files, scheduler, learning_ai, local_learning, internet_learner, power_monitor)
+    _register_handlers(router, system, voice, files, scheduler, learning_ai, local_learning, internet_learner, power_monitor, personality, deep_memory, analyzer, proactive_assistant)
     
     # Start scheduler
     scheduler.start()
@@ -203,6 +236,12 @@ def create_app(config: Dict):
     if cloud_sync_client and cloud_sync_client.enabled:
         cloud_sync_client.start()
         logger.info("Cloud sync client started")
+    
+    # Start proactive monitoring in local mode
+    if proactive_assistant and proactive_assistant.enabled:
+        proactive_assistant.set_suggestion_callback(_proactive_suggestion_callback)
+        proactive_assistant.start_monitoring()
+        logger.info("Proactive monitoring started")
     
     # Health check endpoint for Render.com
     def health_check(request):
@@ -235,6 +274,12 @@ def create_app(config: Dict):
         Route("/api/cloud-sync/trigger", endpoint=trigger_cloud_sync, methods=["POST"]),
         Route("/api/custom-llm/status", endpoint=get_custom_llm_status),
         Route("/api/custom-llm/retrain", endpoint=trigger_custom_llm_retrain, methods=["POST"]),
+        # Iron Man Features
+        Route("/api/hud", endpoint=hud_page),
+        Route("/api/personality/status", endpoint=get_personality_status),
+        Route("/api/deep-memory/status", endpoint=get_deep_memory_status),
+        Route("/api/proactive/status", endpoint=get_proactive_status),
+        Route("/api/analyzer/system-report", endpoint=get_system_report),
         WebSocketRoute("/ws", endpoint=websocket_endpoint),
     ]
     
@@ -242,11 +287,14 @@ def create_app(config: Dict):
     return app
 
 
-def _register_handlers(router, system, voice, files, scheduler, learning_ai, local_learning=None, internet_learner=None, power_monitor=None):
+def _register_handlers(router, system, voice, files, scheduler, learning_ai, local_learning=None, internet_learner=None, power_monitor=None, personality=None, deep_memory=None, analyzer=None, proactive_assistant=None):
     """Register command handlers"""
     
-    # Greetings - varied responses from conversation engine
+    # Greetings - British style
     def handle_greet(cmd):
+        pers = jarvis_state.get('personality')
+        if pers:
+            return pers._british_greeting()
         conv_engine = jarvis_state.get('conversation_engine')
         if conv_engine:
             return conv_engine.get_greeting()
@@ -616,8 +664,113 @@ def _register_handlers(router, system, voice, files, scheduler, learning_ai, loc
             if result.get('status') == 'success':
                 return f"Cloud sync complete! {result.get('message', 'Synced successfully')}"
             return f"Cloud sync failed: {result.get('message', 'Unknown error')}"
-        return "Cloud sync is not available."
     router.register_handler("cloud_sync_now", handle_cloud_sync_now)
+    
+    # === Iron Man Feature Handlers ===
+    
+    # Analyzer handlers
+    if analyzer:
+        def handle_analyze_file(cmd):
+            file_path = cmd.parameters.get('file_path', '')
+            if not file_path:
+                return "Please specify a file to analyze. Try: 'analyze mydata.csv'"
+            result = analyzer.analyze_file(file_path)
+            if 'error' in result:
+                return result['error']
+            if result.get('type') == 'csv':
+                return f"File {result['file']}: {result['rows']} rows, {result['columns']} columns. Columns: {', '.join(result['column_names'][:5])}"
+            elif result.get('type') == 'json':
+                return f"File {result['file']}: {result.get('structure', 'unknown')} with {result.get('items' or result.get('keys', 0))} items"
+            elif result.get('type') == 'text':
+                return f"File {result['file']}: {result['words']} words, {result['lines']} lines, {result['characters']} characters"
+            return str(result)
+        router.register_handler("analyze_file", handle_analyze_file)
+        
+        def handle_calculate_complex(cmd):
+            expression = cmd.parameters.get('expression', '')
+            if not expression:
+                return "What would you like me to calculate? Try: 'calculate 15% of 250' or 'convert 100 celsius to fahrenheit'"
+            result = analyzer.calculate(expression)
+            if 'error' in result:
+                return result['error']
+            if result.get('type') == 'percentage':
+                return f"{result['expression']} = {result['result']}"
+            elif result.get('type') == 'temperature':
+                return f"{result['from']} = {result['to']}"
+            elif result.get('type') == 'length':
+                return f"{result['from']} = {result['to']}"
+            elif result.get('type') == 'weight':
+                return f"{result['from']} = {result['to']}"
+            elif result.get('type') == 'emi':
+                return f"EMI: {result['emi']}/month. Total payment: {result['total_payment']}, Interest: {result['total_interest']}"
+            elif result.get('type') == 'compound_interest':
+                return f"Final amount: {result['final_amount']}, Interest earned: {result['interest_earned']}"
+            elif result.get('type') == 'math':
+                return f"{result['expression']} = {result['result']}"
+            return str(result)
+        router.register_handler("calculate_complex", handle_calculate_complex)
+        
+        def handle_generate_report(cmd):
+            system_report = analyzer.generate_system_report()
+            learning_stats = learning_ai.get_stats() if learning_ai else {}
+            internet_stats = internet_learner.get_status() if internet_learner else {}
+            local_stats = local_learning.get_learning_summary() if local_learning else {}
+            deep_stats = deep_memory.get_status() if deep_memory else {}
+            
+            report = analyzer.generate_learning_report(learning_stats, internet_stats, local_stats, deep_stats)
+            
+            # Add system info
+            sys_info = system_report.get('system', {})
+            report += "\n--- System Status ---\n"
+            report += f"CPU: {sys_info.get('cpu', {}).get('usage_percent', 0)}%\n"
+            report += f"Memory: {sys_info.get('memory', {}).get('used_percent', 0)}%\n"
+            report += f"Disk: {sys_info.get('disk', {}).get('used_percent', 0)}%\n"
+            
+            if personality:
+                return personality.britishize(report, context="general")
+            return report
+        router.register_handler("generate_report", handle_generate_report)
+    
+    # Deep Memory handlers
+    if deep_memory:
+        def handle_deep_memory_status(cmd):
+            status = deep_memory.get_status()
+            lines = ["Deep Memory Status:"]
+            lines.append(f"  Conversations stored: {status.get('conversation_count', 0)}")
+            lines.append(f"  Preferences: {status.get('preference_count', 0)}")
+            lines.append(f"  Habits: {status.get('habit_count', 0)}")
+            lines.append(f"  Topics tracked: {status.get('topic_count', 0)}")
+            profile = status.get('user_profile', {})
+            if profile.get('name'):
+                lines.append(f"  User: {profile['name']}")
+            return "\n".join(lines)
+        router.register_handler("deep_memory_status", handle_deep_memory_status)
+        
+        def handle_what_did_we_discuss(cmd):
+            time_frame = cmd.parameters.get('time_frame', 'recently')
+            response = deep_memory.what_did_we_discuss(time_frame)
+            if personality:
+                return personality.britishize(response, context="general")
+            return response
+        router.register_handler("what_did_we_discuss", handle_what_did_we_discuss)
+    
+    # Proactive status handler
+    def handle_proactive_status(cmd):
+        if proactive_assistant:
+            status = proactive_assistant.get_status()
+            lines = ["Proactive Monitoring Status:"]
+            lines.append(f"  Enabled: {'Yes' if status['enabled'] else 'No'}")
+            lines.append(f"  Monitoring: {'Yes' if status['monitoring'] else 'No'}")
+            lines.append(f"  Check interval: {status['check_interval']}s")
+            lines.append(f"  Total alerts: {status['total_alerts']}")
+            patterns = status.get('user_patterns', {})
+            if patterns.get('peak_hours'):
+                lines.append(f"  Peak hours: {', '.join(map(str, patterns['peak_hours']))}")
+            if patterns.get('frequent_apps'):
+                lines.append(f"  Frequent apps: {', '.join(patterns['frequent_apps'][:3])}")
+            return "\n".join(lines)
+        return "Proactive monitoring is not available in cloud mode."
+    router.register_handler("proactive_status", handle_proactive_status)
 
 
 async def index(request):
@@ -1059,6 +1212,8 @@ async def process_command(text: str, conv_context=None) -> str:
     local_learning = jarvis_state.get('local_learning')
     voice = jarvis_state.get('voice')
     conv_engine = jarvis_state.get('conversation_engine')
+    personality = jarvis_state.get('personality')
+    deep_memory = jarvis_state.get('deep_memory')
     
     if not router:
         return "System not initialized"
@@ -1131,6 +1286,21 @@ async def process_command(text: str, conv_context=None) -> str:
             
             if local_learning:
                 local_learning.process_interaction(text, response, was_successful=True)
+            
+            # Deep memory: record conversation and extract preferences
+            if deep_memory:
+                pref = deep_memory.extract_preference_from_input(text)
+                if pref and pref[0] == "name":
+                    deep_memory.set_user_name(pref[1])
+                    response = f"Nice to meet you, {pref[1]}! I'll remember that, sir."
+                elif pref:
+                    deep_memory.remember_preference(pref[0], pref[1])
+                topics = deep_memory.extract_topics_from_input(text)
+                deep_memory.record_conversation(text, response, topics=topics)
+            
+            # Wrap with British personality (skip if already British-styled)
+            if personality and "sir" not in response.lower():
+                response = personality.britishize(response, context="general")
             
             if voice:
                 voice.speak_async(response)
@@ -1237,3 +1407,60 @@ def trigger_custom_llm_retrain(request):
         return JSONResponse({"status": "retrained", "stats": custom_llm.get_stats()})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ============================================================================
+# Iron Man Feature API Endpoints
+# ============================================================================
+
+async def hud_page(request):
+    """Serve the HUD dashboard"""
+    html_path = Path(__file__).parent / "hud.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text(encoding='utf-8'))
+    return HTMLResponse("HUD not found", status_code=404)
+
+def get_personality_status(request):
+    """Get personality engine status"""
+    personality = jarvis_state.get('personality')
+    if not personality:
+        return JSONResponse({"error": "Personality not initialized"})
+    return JSONResponse({
+        "enabled": True,
+        "humor": personality.humor_enabled,
+        "empathy": personality.empathy_enabled,
+        "sarcasm_level": personality.sarcasm_level,
+        "formality_level": personality.formality_level,
+    })
+
+def get_deep_memory_status(request):
+    """Get deep memory status"""
+    deep_memory = jarvis_state.get('deep_memory')
+    if not deep_memory:
+        return JSONResponse({"error": "Deep memory not initialized"})
+    return JSONResponse(deep_memory.get_status())
+
+def get_proactive_status(request):
+    """Get proactive assistant status"""
+    proactive = jarvis_state.get('proactive_assistant')
+    if not proactive:
+        return JSONResponse({"error": "Proactive assistant not available in cloud mode"})
+    return JSONResponse(proactive.get_status())
+
+def get_system_report(request):
+    """Get system report from analyzer"""
+    analyzer = jarvis_state.get('analyzer')
+    if not analyzer:
+        return JSONResponse({"error": "Analyzer not initialized"})
+    return JSONResponse(analyzer.generate_system_report())
+
+
+# Proactive suggestion callback - broadcasts to WebSocket clients
+async def _proactive_suggestion_callback(message, urgency, action):
+    """Called when proactive assistant generates a suggestion"""
+    await broadcast({
+        "type": "suggestion",
+        "content": message,
+        "urgency": urgency,
+        "action": action,
+    })

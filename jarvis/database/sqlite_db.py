@@ -386,3 +386,31 @@ class SQLiteDB:
                 self.conn.close()
                 self.conn = None
                 logger.info("SQLite database connection closed")
+    
+    # ==================== Meta Key-Value Store ====================
+    
+    def set_meta(self, key: str, value: str):
+        """Set a meta key-value pair"""
+        if not self.is_available():
+            return
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', (key, value))
+                self.conn.commit()
+            except Exception as e:
+                logger.error(f"Error setting meta {key}: {e}")
+    
+    def get_meta(self, key: str):
+        """Get a meta value by key"""
+        if not self.is_available():
+            return None
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('SELECT value FROM meta WHERE key = ?', (key,))
+                row = cursor.fetchone()
+                return row['value'] if row else None
+            except Exception as e:
+                logger.error(f"Error getting meta {key}: {e}")
+                return None
